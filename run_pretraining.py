@@ -15,7 +15,6 @@
 
 """Pre-trains an ELECTRA model."""
 
-import pickle
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -33,6 +32,7 @@ from pretrain import pretrain_data
 from pretrain import pretrain_helpers
 from util import training_utils
 from util import utils
+import pickle
 
 
 class PretrainingModel(object):
@@ -176,7 +176,8 @@ class PretrainingModel(object):
           logits = tf.constant(
               pickle.load(
                   open(self._config.ngram_pkl_path, 'rb')
-              ).expand_dims(axis=(0, 1))  # add batch and seq dim, will be broadcast to true size
+              ).reshape(1,1,-1),  # add batch and seq dim, will be broadcast to true size
+              dtype=tf.float32,
           )
         logits_tiled = tf.zeros(
             modeling.get_shape_list(inputs.masked_lm_ids) +

@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import pickle
 from pathlib import Path
 from itertools import chain, tee
@@ -28,13 +29,13 @@ def parse_tfrecords_for_ids(path: Union[str, Path]) -> Iterable[List[int]]:
     if isinstance(path, str):
         path = Path(path)
 
-    records = path.iterdir() if path.is_dir() else [path]
+    records = list(path.iterdir()) if path.is_dir() else [path]
     return chain.from_iterable(
         (
             tf.train.Example.FromString(e).features.feature['input_ids'].int64_list.value
-            for e in tf.data.TFRecordDataset(str(r_path))
+            for e in tf.python_io.tf_record_iterator(str(r_path))  # tf.data.TFRecordDataset(str(r_path))
         )
-        for r_path in records
+        for r_path in tqdm(records)
     )
 
 
@@ -72,10 +73,10 @@ def pickle_output(fn, out_path):
 
 
 class Launcher:
-    def __init__(self, in_path, vocab_size, out_path='out.pkl',):
+    def __init__(self, in_path, vocab_size: int, out_path='out.pkl',):
         self.sample_generator = parse_tfrecords_for_ids(in_path)
         self.output_path = out_path
-        self.vocab_size = vocab_size
+        self.vocab_size = int(vocab_size)
 
     def monogram(self,):
         pickle_output(mono_gram, out_path=self.output_path)(samples=self.sample_generator, vocab_size=self.vocab_size)
