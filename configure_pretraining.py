@@ -66,7 +66,11 @@ class PretrainingConfig(object):
     self.do_lower_case = True  # lowercase the input?
 
     # generator settings
+    """ replaced by ngram=0
     self.uniform_generator = False  # generator is uniform at random
+    """
+    self.ngram_generator = -1  # generate from n_gram,
+    self.ngram_pkl_path = ''  #
     self.two_tower_generator = False  # generator is a two-tower cloze model
     self.untied_generator_embeddings = False  # tie generator/discriminator
                                               # token embeddings?
