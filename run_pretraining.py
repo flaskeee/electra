@@ -15,6 +15,7 @@
 
 """Pre-trains an ELECTRA model."""
 
+import pickle
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -58,8 +59,12 @@ class PretrainingModel(object):
         self._bert_config.hidden_size if config.embedding_size is None else
         config.embedding_size)
     cloze_output = None
-    if config.uniform_generator:
-      # simple generator sampling fakes uniformly at random
+    if config.ngram_generator > -1:
+      print('using n_gram: ', config.ngram_generator)
+      if config.ngram_generator > 1:
+        raise NotImplementedError('requested n_gram not implemented yet')
+      if config.ngram_generator > 0 and not config.ngram_generator:
+        raise RuntimeError('Missing path to n_gram file, set via "ngram_pkl_path"')
       mlm_output = self._get_masked_lm_output(masked_inputs, None)
     elif ((config.electra_objective or config.electric_objective)
           and config.untied_generator):
@@ -164,8 +169,15 @@ class PretrainingModel(object):
   def _get_masked_lm_output(self, inputs: pretrain_data.Inputs, model):
     """Masked language modeling softmax layer."""
     with tf.variable_scope("generator_predictions"):
-      if self._config.uniform_generator:
-        logits = tf.zeros(self._bert_config.vocab_size)
+      if 0 <= self._config.ngram_generator < 2:
+        if self._config.ngram_generator == 0:
+          logits = tf.zeros(self._bert_config.vocab_size)
+        elif self._config.ngram_generator == 1:
+          logits = tf.constant(
+              pickle.load(
+                  open(self._config.ngram_pkl_path, 'rb')
+              ).expand_dims(axis=(0, 1))  # add batch and seq dim, will be broadcast to true size
+          )
         logits_tiled = tf.zeros(
             modeling.get_shape_list(inputs.masked_lm_ids) +
             [self._bert_config.vocab_size])
@@ -178,7 +190,7 @@ class PretrainingModel(object):
             relevant_reprs, model.get_embedding_table(), self._bert_config)
       return get_softmax_output(
           logits, inputs.masked_lm_ids, inputs.masked_lm_weights,
-          self._bert_config.vocab_size)
+          self._bert_config.vocab_size, already_in_prob=self._config.ngram_generator > 0)
 
   def _get_discriminator_output(
       self, inputs, discriminator, labels, cloze_output=None):
@@ -268,15 +280,20 @@ def get_token_logits(input_reprs, embedding_table, bert_config):
   return logits
 
 
-def get_softmax_output(logits, targets, weights, vocab_size):
-  oh_labels = tf.one_hot(targets, depth=vocab_size, dtype=tf.float32)
+def get_softmax_output(logits, targets, weights, vocab_size, already_in_prob=False):
   preds = tf.argmax(logits, axis=-1, output_type=tf.int32)
-  probs = tf.nn.softmax(logits)
-  log_probs = tf.nn.log_softmax(logits)
-  label_log_probs = -tf.reduce_sum(log_probs * oh_labels, axis=-1)
-  numerator = tf.reduce_sum(weights * label_log_probs)
-  denominator = tf.reduce_sum(weights) + 1e-6
-  loss = numerator / denominator
+  if already_in_prob:
+      probs = logits
+      label_log_probs = tf.log(probs)
+      loss = 0
+  else:
+      oh_labels = tf.one_hot(targets, depth=vocab_size, dtype=tf.float32)
+      probs = tf.nn.softmax(logits)
+      log_probs = tf.nn.log_softmax(logits)
+      label_log_probs = -tf.reduce_sum(log_probs * oh_labels, axis=-1)
+      numerator = tf.reduce_sum(weights * label_log_probs)
+      denominator = tf.reduce_sum(weights) + 1e-6
+      loss = numerator / denominator
   SoftmaxOutput = collections.namedtuple(
       "SoftmaxOutput", ["logits", "probs", "loss", "per_example_loss", "preds",
                         "weights"])
