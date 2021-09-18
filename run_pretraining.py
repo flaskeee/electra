@@ -33,6 +33,7 @@ from pretrain import pretrain_helpers
 from util import training_utils
 from util import utils
 import pickle
+import numpy as np
 
 
 class PretrainingModel(object):
@@ -172,18 +173,26 @@ class PretrainingModel(object):
       if 0 <= self._config.ngram_generator < 2:
         if self._config.ngram_generator == 0:
           logits = tf.zeros(self._bert_config.vocab_size)
+          logits_tiled = tf.zeros(
+              modeling.get_shape_list(inputs.masked_lm_ids) +
+              [self._bert_config.vocab_size])
+          logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
+          logits = logits_tiled
         elif self._config.ngram_generator == 1:
-          logits = tf.constant(
-              pickle.load(
+          word_count = pickle.load(
                   open(self._config.ngram_pkl_path, 'rb')
-              ).reshape(1,1,-1),  # add batch and seq dim, will be broadcast to true size
+                )
+          ignore_thrd = np.sort(word_count.reshape(-1))[-30]
+          word_count[word_count > ignore_thrd] = 0
+          logits = tf.constant(
+              np.log(word_count + 1e-6),
               dtype=tf.float32,
           )
-        logits_tiled = tf.zeros(
-            modeling.get_shape_list(inputs.masked_lm_ids) +
-            [self._bert_config.vocab_size])
-        logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
-        logits = logits_tiled
+          logits_tiled = tf.zeros(
+              modeling.get_shape_list(inputs.masked_lm_ids) +
+              [self._bert_config.vocab_size])
+          logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
+          logits = logits_tiled
       else:
         relevant_reprs = pretrain_helpers.gather_positions(
             model.get_sequence_output(), inputs.masked_lm_positions)
@@ -191,7 +200,7 @@ class PretrainingModel(object):
             relevant_reprs, model.get_embedding_table(), self._bert_config)
       return get_softmax_output(
           logits, inputs.masked_lm_ids, inputs.masked_lm_weights,
-          self._bert_config.vocab_size, already_in_prob=self._config.ngram_generator > 0)
+          self._bert_config.vocab_size,)
 
   def _get_discriminator_output(
       self, inputs, discriminator, labels, cloze_output=None):
@@ -281,27 +290,21 @@ def get_token_logits(input_reprs, embedding_table, bert_config):
   return logits
 
 
-def get_softmax_output(logits, targets, weights, vocab_size, already_in_prob=False):
+def get_softmax_output(logits, targets, weights, vocab_size):
+  oh_labels = tf.one_hot(targets, depth=vocab_size, dtype=tf.float32)
   preds = tf.argmax(logits, axis=-1, output_type=tf.int32)
-  if already_in_prob:
-      probs = logits
-      label_log_probs = tf.log(probs)
-      loss = 0
-  else:
-      oh_labels = tf.one_hot(targets, depth=vocab_size, dtype=tf.float32)
-      probs = tf.nn.softmax(logits)
-      log_probs = tf.nn.log_softmax(logits)
-      label_log_probs = -tf.reduce_sum(log_probs * oh_labels, axis=-1)
-      numerator = tf.reduce_sum(weights * label_log_probs)
-      denominator = tf.reduce_sum(weights) + 1e-6
-      loss = numerator / denominator
+  probs = tf.nn.softmax(logits)
+  log_probs = tf.nn.log_softmax(logits)
+  label_log_probs = -tf.reduce_sum(log_probs * oh_labels, axis=-1)
+  numerator = tf.reduce_sum(weights * label_log_probs)
+  denominator = tf.reduce_sum(weights) + 1e-6
+  loss = numerator / denominator
   SoftmaxOutput = collections.namedtuple(
       "SoftmaxOutput", ["logits", "probs", "loss", "per_example_loss", "preds",
                         "weights"])
   return SoftmaxOutput(
       logits=logits, probs=probs, per_example_loss=label_log_probs,
       loss=loss, preds=preds, weights=weights)
-
 
 class TwoTowerClozeTransformer(object):
   """Build a two-tower Transformer used as Electric's generator."""
