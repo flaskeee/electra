@@ -173,11 +173,6 @@ class PretrainingModel(object):
       if 0 <= self._config.ngram_generator < 2:
         if self._config.ngram_generator == 0:
           logits = tf.zeros(self._bert_config.vocab_size)
-          logits_tiled = tf.zeros(
-              modeling.get_shape_list(inputs.masked_lm_ids) +
-              [self._bert_config.vocab_size])
-          logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
-          logits = logits_tiled
         elif self._config.ngram_generator == 1:
           word_count = pickle.load(
                   open(self._config.ngram_pkl_path, 'rb')
@@ -188,11 +183,11 @@ class PretrainingModel(object):
               np.log(word_count + 1e-6),
               dtype=tf.float32,
           )
-          logits_tiled = tf.zeros(
-              modeling.get_shape_list(inputs.masked_lm_ids) +
-              [self._bert_config.vocab_size])
-          logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
-          logits = logits_tiled
+        logits_tiled = tf.zeros(
+            modeling.get_shape_list(inputs.masked_lm_ids) +
+            [self._bert_config.vocab_size])
+        logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
+        logits = logits_tiled
       else:
         relevant_reprs = pretrain_helpers.gather_positions(
             model.get_sequence_output(), inputs.masked_lm_positions)
