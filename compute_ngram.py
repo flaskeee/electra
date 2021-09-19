@@ -6,6 +6,8 @@ from collections import Counter
 from typing import Iterable, Union, List
 import numpy as np
 from scipy.sparse import dok_matrix
+from multiprocessing import pool
+from functools import partial
 
 import tensorflow as tf
 tf.enable_eager_execution()
@@ -39,6 +41,19 @@ def parse_tfrecords_for_ids(path: Union[str, Path]) -> Iterable[List[int]]:
     )
 
 
+def parallelize_ngram(fn, aggregate_fn=sum):
+    def new_fn(samples, vocab_size):
+        with pool.Pool() as p:
+            return aggregate_fn(
+                p.map(
+                    partial(fn, vocab_size=vocab_size),
+                    samples
+                )
+            )
+    return new_fn
+
+
+@parallelize_ngram
 def mono_gram(
     samples: Iterable[Iterable[int]],
     vocab_size: int,
@@ -46,21 +61,22 @@ def mono_gram(
     counter = np.zeros(vocab_size)
     for v in chain.from_iterable(samples):
         counter[v] += 1
-    return counter / counter.sum()
+    return counter
 
 
+@parallelize_ngram
 def bi_gram(
     samples: Iterable[Iterable[int]],
     vocab_size: int,
 ):
-    counter = dok_matrix((vocab_size, vocab_size))
+    counter = np.zeros((vocab_size, vocab_size))
     for s in samples:
         prev_iter, curr_iter = tee(s, 2)
         next(curr_iter, None)
         for prev, curr in zip(prev_iter, curr_iter):
             counter[prev, curr] += 1
 
-    return counter / counter.sum(axis=1)
+    return counter
 
 
 def pickle_output(fn, out_path):
