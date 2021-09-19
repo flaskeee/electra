@@ -170,24 +170,32 @@ class PretrainingModel(object):
   def _get_masked_lm_output(self, inputs: pretrain_data.Inputs, model):
     """Masked language modeling softmax layer."""
     with tf.variable_scope("generator_predictions"):
-      if 0 <= self._config.ngram_generator < 2:
-        if self._config.ngram_generator == 0:
-          logits = tf.zeros(self._bert_config.vocab_size)
-        elif self._config.ngram_generator == 1:
+      # ngram generators
+      if self._config.ngram_generator > 0:
+        if self._config.ngram_generator > 1:
           word_count = pickle.load(
-                  open(self._config.ngram_pkl_path, 'rb')
-                )
-          ignore_thrd = np.sort(word_count.reshape(-1))[-30]
-          word_count[word_count > ignore_thrd] = 0
-          logits = tf.constant(
-              np.log(word_count + 1e-6),
-              dtype=tf.float32,
+              open(self._config.ngram_pkl_path, 'rb')
           )
-        logits_tiled = tf.zeros(
-            modeling.get_shape_list(inputs.masked_lm_ids) +
-            [self._bert_config.vocab_size])
-        logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
-        logits = logits_tiled
+        if self._config.ngram_generator < 2:
+          if self._config.ngram_generator == 0:
+            logits = tf.zeros(self._bert_config.vocab_size)
+          elif self._config.ngram_generator == 1:
+            ignore_thrd = np.sort(word_count.reshape(-1))[-30]
+            word_count[word_count > ignore_thrd] = 0
+            logits = tf.constant(
+                np.log(word_count + 1e-6),
+                dtype=tf.float32,
+            )
+          logits_tiled = tf.zeros(
+              modeling.get_shape_list(inputs.masked_lm_ids) +
+              [self._bert_config.vocab_size])
+          logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
+          logits = logits_tiled
+        elif self._config.ngram_generator == 2:
+            logits = tf.gather(
+                tf.constant(np.log(word_count + 10)),
+                inputs.masked_lm_ids,
+            )
       else:
         relevant_reprs = pretrain_helpers.gather_positions(
             model.get_sequence_output(), inputs.masked_lm_positions)
