@@ -36,6 +36,33 @@ import pickle
 import numpy as np
 
 
+class FeedNgram(tf.estimator.SessionRunHook):
+  def before_run(self, run_context):
+    word_count = pickle.load(
+          open('owt_2_gram.pkl', 'rb')
+    )
+
+    session = run_context.session
+    feed_dict = run_context.original_args.feed_dict
+    if feed_dict is None:
+      feed_dict = {}
+    feed_dict['generator_predictions/Placeholder:0'] = word_count 
+    return tf.estimator.SessionRunArgs(
+                fetches=run_context.original_args.fetches,
+                feed_dict=feed_dict,
+                options=run_context.original_args.options,
+            )
+    new_context = tf.estimator.SessionRunContext(
+            original_args=tf.estimator.SessionRunArgs(
+                fetches=run_context.original_args.fetches,
+                feed_dict=feed_dict,
+                options=run_context.original_args.options,
+            ),
+            session=session,
+        )
+                
+    return new_context
+
 class PretrainingModel(object):
   """Transformer pre-training using the replaced-token-detection task."""
 
@@ -192,13 +219,15 @@ class PretrainingModel(object):
           logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
           logits = logits_tiled
         elif self._config.ngram_generator == 2:
+            word_count_holder = tf.placeholder(dtype=tf.float32, shape=word_count.shape)
+            # word_count_holder = tf.constant(word_count)
+            # tf.assign(word_count_holder, word_count)
+            id_before_masked_positions = pretrain_helpers.gather_positions(
+                model.get_sequence_output(), inputs.masked_lm_positions-1)
             logits = tf.gather(
-                tf.sparse.SparseTensor(
-                    *zip(*((idx, val) for idx, val in np.ndenumerate(word_count) if val != 0)),
-                    word_count.shape,
-                ),
-                inputs.masked_lm_ids,
-            ).to_dense()
+                word_count_holder,
+                id_before_masked_positions,
+            )
             print('bigram generated')
             logits = tf.log(logits+10)
       else:
@@ -400,7 +429,8 @@ def model_fn_builder(config: configure_pretraining.PretrainingConfig):
           training_hooks=[training_utils.ETAHook(
               {} if config.use_tpu else dict(loss=model.total_loss),
               config.num_train_steps, config.iterations_per_loop,
-              config.use_tpu)]
+              config.use_tpu),
+              FeedNgram(),]
       )
     elif mode == tf.estimator.ModeKeys.EVAL:
       output_spec = tf.estimator.tpu.TPUEstimatorSpec(
