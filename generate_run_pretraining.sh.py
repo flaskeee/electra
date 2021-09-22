@@ -5,9 +5,9 @@ import fire
 def generate_run_name(d: dict):
     out = []
     for k, v in d.items():
-        if v in [int, float, str]:
+        if type(v) in [int, float, str]:
             out.append(
-                'k' + '=' + str(v)
+                k + '=' + str(v)
             )
     return '.'.join(out)
 
@@ -23,15 +23,14 @@ def get_ngram_options(n):
 
 
 def generate_script(options: dict):
-    return f"""
-#!/bin/sh
+    return f"""#!/bin/sh
 
 #SBATCH --job-name=electra_pretraining
 #SBATCH --partition=standard
 #SBATCH --account=nlp
 
-#SBATCH --ntasks=2
-#SBATCH --time=1:00:00
+#SBATCH --ntasks=8
+#SBATCH --time=10:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 
