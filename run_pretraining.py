@@ -62,7 +62,7 @@ class PretrainingModel(object):
     cloze_output = None
     if config.ngram_generator > -1:
       print('using n_gram: ', config.ngram_generator)
-      if config.ngram_generator > 1:
+      if config.ngram_generator > 2:
         raise NotImplementedError('requested n_gram not implemented yet')
       if config.ngram_generator > 0 and not config.ngram_generator:
         raise RuntimeError('Missing path to n_gram file, set via "ngram_pkl_path"')
@@ -171,8 +171,8 @@ class PretrainingModel(object):
     """Masked language modeling softmax layer."""
     with tf.variable_scope("generator_predictions"):
       # ngram generators
-      if self._config.ngram_generator > 0:
-        if self._config.ngram_generator > 1:
+      if self._config.ngram_generator >= 0:
+        if self._config.ngram_generator > 0:
           word_count = pickle.load(
               open(self._config.ngram_pkl_path, 'rb')
           )
@@ -193,9 +193,14 @@ class PretrainingModel(object):
           logits = logits_tiled
         elif self._config.ngram_generator == 2:
             logits = tf.gather(
-                tf.constant(np.log(word_count + 10)),
+                tf.sparse.SparseTensor(
+                    *zip(*((idx, val) for idx, val in np.ndenumerate(word_count) if val != 0)),
+                    word_count.shape,
+                ),
                 inputs.masked_lm_ids,
-            )
+            ).to_dense()
+            print('bigram generated')
+            logits = tf.log(logits+10)
       else:
         relevant_reprs = pretrain_helpers.gather_positions(
             model.get_sequence_output(), inputs.masked_lm_positions)
