@@ -47,7 +47,8 @@ class FeedNgram(tf.estimator.SessionRunHook):
     feed_dict = run_context.original_args.feed_dict
     if feed_dict is None:
       feed_dict = {}
-    feed_dict[word_count_holder] = word_count 
+    if word_count_holder is not None:
+        feed_dict[word_count_holder] = word_count 
     return tf.estimator.SessionRunArgs(
                 fetches=run_context.original_args.fetches,
                 feed_dict=feed_dict,
@@ -219,12 +220,12 @@ class PretrainingModel(object):
           logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
           logits = logits_tiled
         elif self._config.ngram_generator == 2:
-            global word_count_holder 
+            global word_count_holder
             word_count_holder = tf.placeholder(dtype=tf.float32, shape=(self._bert_config.vocab_size,)*2)
             # word_count_holder = tf.constant(word_count)
             # tf.assign(word_count_holder, word_count)
             id_before_masked_positions = pretrain_helpers.gather_positions(
-                model.input_ids, inputs.masked_lm_positions-1)
+                inputs.input_ids, inputs.masked_lm_positions-1)
             logits = tf.gather(
                 word_count_holder,
                 id_before_masked_positions,

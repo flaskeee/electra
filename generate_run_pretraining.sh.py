@@ -38,9 +38,9 @@ eval "$(conda shell.bash hook)"
 conda activate tf1
 PY=`which python`
 
-DATA_DIR=/xdisk/bethard/jiachengz/electra_pretraining/openwebtext
+DATA_DIR=pretraining_data
 
-singularity exec --nv /groups/bethard/image/tensorflow_1_15.sif python3 run_pretraining.py --data-dir $DATA_DIR \\
+python3 run_pretraining.py --data-dir $DATA_DIR \\
     --model-name {generate_run_name(options)} \\
     --hparams '{json.dumps(options)}'
     """
@@ -58,5 +58,5 @@ def main(
 
 
 if __name__ == '__main__':
-    print(fire.Fire(main))
+    (fire.Fire(main))
 
