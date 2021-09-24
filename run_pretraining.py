@@ -35,6 +35,7 @@ from util import utils
 import pickle
 import numpy as np
 
+word_count_holder = None
 
 class FeedNgram(tf.estimator.SessionRunHook):
   def before_run(self, run_context):
@@ -46,7 +47,7 @@ class FeedNgram(tf.estimator.SessionRunHook):
     feed_dict = run_context.original_args.feed_dict
     if feed_dict is None:
       feed_dict = {}
-    feed_dict['generator_predictions/Placeholder:0'] = word_count 
+    feed_dict[word_count_holder] = word_count 
     return tf.estimator.SessionRunArgs(
                 fetches=run_context.original_args.fetches,
                 feed_dict=feed_dict,
@@ -199,14 +200,13 @@ class PretrainingModel(object):
     with tf.variable_scope("generator_predictions"):
       # ngram generators
       if self._config.ngram_generator >= 0:
-        if self._config.ngram_generator > 0:
-          word_count = pickle.load(
-              open(self._config.ngram_pkl_path, 'rb')
-          )
         if self._config.ngram_generator < 2:
           if self._config.ngram_generator == 0:
             logits = tf.zeros(self._bert_config.vocab_size)
           elif self._config.ngram_generator == 1:
+            word_count = pickle.load(
+                open(self._config.ngram_pkl_path, 'rb')
+            )
             ignore_thrd = np.sort(word_count.reshape(-1))[-30]
             word_count[word_count > ignore_thrd] = 0
             logits = tf.constant(
@@ -219,11 +219,12 @@ class PretrainingModel(object):
           logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
           logits = logits_tiled
         elif self._config.ngram_generator == 2:
-            word_count_holder = tf.placeholder(dtype=tf.float32, shape=word_count.shape)
+            global word_count_holder 
+            word_count_holder = tf.placeholder(dtype=tf.float32, shape=(self._bert_config.vocab_size,)*2)
             # word_count_holder = tf.constant(word_count)
             # tf.assign(word_count_holder, word_count)
             id_before_masked_positions = pretrain_helpers.gather_positions(
-                model.get_sequence_output(), inputs.masked_lm_positions-1)
+                model.input_ids, inputs.masked_lm_positions-1)
             logits = tf.gather(
                 word_count_holder,
                 id_before_masked_positions,
@@ -484,7 +485,7 @@ def train_or_eval(config: configure_pretraining.PretrainingConfig):
   if config.do_train:
     utils.heading("Running training")
     estimator.train(input_fn=pretrain_data.get_input_fn(config, True),
-                    max_steps=config.num_train_steps)
+                    max_steps=150000,)  # config.num_train_steps)
   if config.do_eval:
     utils.heading("Running evaluation")
     result = estimator.evaluate(

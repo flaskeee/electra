@@ -29,7 +29,7 @@ def generate_script(options: dict):
 #SBATCH --partition=standard
 #SBATCH --account=nlp
 
-#SBATCH --ntasks=8
+#SBATCH --ntasks=6
 #SBATCH --time=10:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
