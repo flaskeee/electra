@@ -192,15 +192,28 @@ class PretrainingModel(object):
           logits_tiled += tf.reshape(logits, [1, 1, self._bert_config.vocab_size])
           logits = logits_tiled
         elif self._config.ngram_generator == 2:
-            logits = tf.gather(
-                tf.sparse.SparseTensor(
-                    *zip(*((idx, val) for idx, val in np.ndenumerate(word_count) if val != 0)),
-                    word_count.shape,
-                ),
-                inputs.masked_lm_ids,
-            ).to_dense()
-            print('bigram generated')
-            logits = tf.log(logits+10)
+          def gather_bigram(id_before_the_masked):
+            return np.take(
+               word_count,
+               id_before_the_masked,
+               axis=0,
+            ).astype(np.float32)
+          id_before_the_masked = pretrain_helpers.gather_positions(
+            inputs.input_ids-1, inputs.masked_lm_positions,
+          )
+          logits = tf.numpy_function(gather_bigram, [id_before_the_masked], tf.float32)
+          logits.set_shape(tf.TensorShape(modeling.get_shape_list(inputs.masked_lm_ids) + [self._bert_config.vocab_size]))
+          """
+          logits = tf.gather(
+              tf.sparse.SparseTensor(
+                  *zip(*((idx, val) for idx, val in np.ndenumerate(word_count) if val != 0)),
+                  word_count.shape,
+              ),
+              inputs.masked_lm_ids,
+          ).to_dense()
+          """
+          print('bigram generated')
+          logits = tf.log(logits+10)
       else:
         relevant_reprs = pretrain_helpers.gather_positions(
             model.get_sequence_output(), inputs.masked_lm_positions)
