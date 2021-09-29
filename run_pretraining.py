@@ -199,7 +199,7 @@ class PretrainingModel(object):
                axis=0,
             ).astype(np.float32)
           id_before_the_masked = pretrain_helpers.gather_positions(
-            inputs.input_ids-1, inputs.masked_lm_positions,
+            inputs.input_ids, inputs.masked_lm_positions-1,
           )
           logits = tf.numpy_function(gather_bigram, [id_before_the_masked], tf.float32)
           logits.set_shape(tf.TensorShape(modeling.get_shape_list(inputs.masked_lm_ids) + [self._bert_config.vocab_size]))
