@@ -113,59 +113,60 @@ class PretrainingModel(object):
           cloze_output)
       self.total_loss += config.disc_weight * disc_output.loss
 
-    # Evaluation
-    eval_fn_inputs = {
-        "input_ids": masked_inputs.input_ids,
-        "masked_lm_preds": mlm_output.preds,
-        "mlm_loss": mlm_output.per_example_loss,
-        "masked_lm_ids": masked_inputs.masked_lm_ids,
-        "masked_lm_weights": masked_inputs.masked_lm_weights,
-        "input_mask": masked_inputs.input_mask
-    }
-    if config.electra_objective or config.electric_objective:
-      eval_fn_inputs.update({
-          "disc_loss": disc_output.per_example_loss,
-          "disc_labels": disc_output.labels,
-          "disc_probs": disc_output.probs,
-          "disc_preds": disc_output.preds,
-          "sampled_tokids": tf.argmax(fake_data.sampled_tokens, -1,
-                                      output_type=tf.int32)
-      })
-    eval_fn_keys = eval_fn_inputs.keys()
-    eval_fn_values = [eval_fn_inputs[k] for k in eval_fn_keys]
-
-    def metric_fn(*args):
-      """Computes the loss and accuracy of the model."""
-      d = {k: arg for k, arg in zip(eval_fn_keys, args)}
-      metrics = dict()
-      metrics["masked_lm_accuracy"] = tf.metrics.accuracy(
-          labels=tf.reshape(d["masked_lm_ids"], [-1]),
-          predictions=tf.reshape(d["masked_lm_preds"], [-1]),
-          weights=tf.reshape(d["masked_lm_weights"], [-1]))
-      metrics["masked_lm_loss"] = tf.metrics.mean(
-          values=tf.reshape(d["mlm_loss"], [-1]),
-          weights=tf.reshape(d["masked_lm_weights"], [-1]))
-      if config.electra_objective or config.electric_objective:
-        metrics["sampled_masked_lm_accuracy"] = tf.metrics.accuracy(
-            labels=tf.reshape(d["masked_lm_ids"], [-1]),
-            predictions=tf.reshape(d["sampled_tokids"], [-1]),
-            weights=tf.reshape(d["masked_lm_weights"], [-1]))
-        if config.disc_weight > 0:
-          metrics["disc_loss"] = tf.metrics.mean(d["disc_loss"])
-          metrics["disc_auc"] = tf.metrics.auc(
-              d["disc_labels"] * d["input_mask"],
-              d["disc_probs"] * tf.cast(d["input_mask"], tf.float32))
-          metrics["disc_accuracy"] = tf.metrics.accuracy(
-              labels=d["disc_labels"], predictions=d["disc_preds"],
-              weights=d["input_mask"])
-          metrics["disc_precision"] = tf.metrics.accuracy(
-              labels=d["disc_labels"], predictions=d["disc_preds"],
-              weights=d["disc_preds"] * d["input_mask"])
-          metrics["disc_recall"] = tf.metrics.accuracy(
-              labels=d["disc_labels"], predictions=d["disc_preds"],
-              weights=d["disc_labels"] * d["input_mask"])
-      return metrics
-    self.eval_metrics = (metric_fn, eval_fn_values)
+    # # Evaluation
+    # eval_fn_inputs = {
+    #     "input_ids": masked_inputs.input_ids,
+    #     "masked_lm_preds": mlm_output.preds,
+    #     "mlm_loss": mlm_output.per_example_loss,
+    #     "masked_lm_ids": masked_inputs.masked_lm_ids,
+    #     "masked_lm_weights": masked_inputs.masked_lm_weights,
+    #     "input_mask": masked_inputs.input_mask
+    # }
+    # if config.electra_objective or config.electric_objective:
+    #   eval_fn_inputs.update({
+    #       "disc_loss": disc_output.per_example_loss,
+    #       "disc_labels": disc_output.labels,
+    #       "disc_probs": disc_output.probs,
+    #       "disc_preds": disc_output.preds,
+    #       "sampled_tokids": tf.argmax(fake_data.sampled_tokens, -1,
+    #                                   output_type=tf.int32)
+    #   })
+    # eval_fn_keys = eval_fn_inputs.keys()
+    # eval_fn_values = [eval_fn_inputs[k] for k in eval_fn_keys]
+    #
+    # def metric_fn(*args):
+    #   """Computes the loss and accuracy of the model."""
+    #   d = {k: arg for k, arg in zip(eval_fn_keys, args)}
+    #   metrics = dict()
+    #   metrics["masked_lm_accuracy"] = tf.metrics.accuracy(
+    #       labels=tf.reshape(d["masked_lm_ids"], [-1]),
+    #       predictions=tf.reshape(d["masked_lm_preds"], [-1]),
+    #       weights=tf.reshape(d["masked_lm_weights"], [-1]))
+    #   metrics["masked_lm_loss"] = tf.metrics.mean(
+    #       values=tf.reshape(d["mlm_loss"], [-1]),
+    #       weights=tf.reshape(d["masked_lm_weights"], [-1]))
+    #   if config.electra_objective or config.electric_objective:
+    #     metrics["sampled_masked_lm_accuracy"] = tf.metrics.accuracy(
+    #         labels=tf.reshape(d["masked_lm_ids"], [-1]),
+    #         predictions=tf.reshape(d["sampled_tokids"], [-1]),
+    #         weights=tf.reshape(d["masked_lm_weights"], [-1]))
+    #     if config.disc_weight > 0:
+    #       metrics["disc_loss"] = tf.metrics.mean(d["disc_loss"])
+    #       metrics["disc_auc"] = tf.metrics.auc(
+    #           d["disc_labels"] * d["input_mask"],
+    #           d["disc_probs"] * tf.cast(d["input_mask"], tf.float32))
+    #       metrics["disc_accuracy"] = tf.metrics.accuracy(
+    #           labels=d["disc_labels"], predictions=d["disc_preds"],
+    #           weights=d["input_mask"])
+    #       metrics["disc_precision"] = tf.metrics.accuracy(
+    #           labels=d["disc_labels"], predictions=d["disc_preds"],
+    #           weights=d["disc_preds"] * d["input_mask"])
+    #       metrics["disc_recall"] = tf.metrics.accuracy(
+    #           labels=d["disc_labels"], predictions=d["disc_preds"],
+    #           weights=d["disc_labels"] * d["input_mask"])
+    #   return metrics
+    # self.eval_metrics = (metric_fn, eval_fn_values)
+    self.eval_metrics = None
 
   def _get_masked_lm_output(self, inputs: pretrain_data.Inputs, model):
     """Masked language modeling softmax layer."""
@@ -416,14 +417,15 @@ def model_fn_builder(config: configure_pretraining.PretrainingConfig):
               config.use_tpu)]
       )
     elif mode == tf.estimator.ModeKeys.EVAL:
-      output_spec = tf.estimator.tpu.TPUEstimatorSpec(
-          mode=mode,
-          loss=model.total_loss,
-          eval_metrics=model.eval_metrics,
-          evaluation_hooks=[training_utils.ETAHook(
-              {} if config.use_tpu else dict(loss=model.total_loss),
-              config.num_eval_steps, config.iterations_per_loop,
-              config.use_tpu, is_training=False)])
+      raise NotImplementedError('EVAL is removed when implementation n_gram pipeline in Cython')
+      # output_spec = tf.estimator.tpu.TPUEstimatorSpec(
+      #     mode=mode,
+      #     loss=model.total_loss,
+      #     eval_metrics=model.eval_metrics,
+      #     evaluation_hooks=[training_utils.ETAHook(
+      #         {} if config.use_tpu else dict(loss=model.total_loss),
+      #         config.num_eval_steps, config.iterations_per_loop,
+      #         config.use_tpu, is_training=False)])
     else:
       raise ValueError("Only TRAIN and EVAL modes are supported")
     return output_spec
