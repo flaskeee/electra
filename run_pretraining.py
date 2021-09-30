@@ -34,6 +34,11 @@ from util import training_utils
 from util import utils
 import pickle
 import numpy as np
+import sampler
+
+# container for output of the fake token generator
+FakedData = collections.namedtuple("FakedData", [
+  "inputs", "is_fake_tokens", "sampled_tokens"])
 
 
 class PretrainingModel(object):
@@ -52,55 +57,106 @@ class PretrainingModel(object):
 
     # Mask the input
     unmasked_inputs = pretrain_data.features_to_inputs(features)
-    masked_inputs = pretrain_helpers.mask(
-        config, unmasked_inputs, config.mask_prob)
 
     # Generator
     embedding_size = (
         self._bert_config.hidden_size if config.embedding_size is None else
         config.embedding_size)
     cloze_output = None
-    if config.ngram_generator > -1:
-      print('using n_gram: ', config.ngram_generator)
-      if config.ngram_generator > 2:
-        raise NotImplementedError('requested n_gram not implemented yet')
-      if config.ngram_generator > 0 and not config.ngram_generator:
-        raise RuntimeError('Missing path to n_gram file, set via "ngram_pkl_path"')
-      mlm_output = self._get_masked_lm_output(masked_inputs, None)
-    elif ((config.electra_objective or config.electric_objective)
-          and config.untied_generator):
-      generator_config = get_generator_config(config, self._bert_config)
-      if config.two_tower_generator:
-        # two-tower cloze model generator used for electric
-        generator = TwoTowerClozeTransformer(
-            config, generator_config, unmasked_inputs, is_training,
-            embedding_size)
-        cloze_output = self._get_cloze_outputs(unmasked_inputs, generator)
-        mlm_output = get_softmax_output(
-            pretrain_helpers.gather_positions(
-                cloze_output.logits, masked_inputs.masked_lm_positions),
-            masked_inputs.masked_lm_ids, masked_inputs.masked_lm_weights,
-            self._bert_config.vocab_size)
+    """
+    Switching between the original generator pipeline or the new pipeline
+      Either arm this if-statement will produce
+        `masked_inputs: Inputs`
+        `fake_data: FakedData` object,
+        set `self.total_loss`
+        however, some fields will be missing in the cython pipeline, as they are used for evaluation,
+        which is disabled.
+    if using cython:
+      fuse following operations in to `sampler.pyx`:
+        - mask generation (`pretrain_helpers.mask`)
+        - fake token prob calculation (`PretrainingModel._get_masked_lm_output`, `get_softmax_output`
+        - fake token sampling / fake input generation  (`PretrainingModel._get_fake_data`)
+    """
+    if config.cython_generator and config.ngram_generator > -1:
+      if config.ngram_generator > 0:
+        word_count = pickle.load(open(config.ngram_pkl_path, 'rb')).astype(np.float32)
+      if config.ngram_generator == 0:
+        sampler_fn = lambda in_ids: sampler.sample_zerogram(in_ids, config.vocab_size-1, config.mask_prob)
+      elif config.ngram_generator == 1:
+        ignore_thrd = np.sort(word_count.reshape(-1))[-30]
+        word_count[word_count > ignore_thrd] = 0
+        word_count /= word_count.sum()
+        sampler_fn = lambda in_ids: sampler.sample_monogram(in_ids, word_count, config.mask_prob)
+      elif config.ngram_generator == 2:
+        word_count = (word_count + 1) / np.sum(word_count, axis=1, keepdims=True)
+        sampler_fn = lambda in_ids: sampler.sample_bigram(in_ids, word_count, config.mask_prob)
       else:
-        # small masked language model generator
-        generator = build_transformer(
-            config, masked_inputs, is_training, generator_config,
-            embedding_size=(None if config.untied_generator_embeddings
-                            else embedding_size),
-            untied_embeddings=config.untied_generator_embeddings,
-            scope="generator")
-        mlm_output = self._get_masked_lm_output(masked_inputs, generator)
+        raise NotImplementedError('N-grams larger than 2 are not implemented')
+
+      masked_ids = tf.numpy_function(
+        sampler_fn,
+        [unmasked_inputs.input_ids],
+        tf.int32
+      )
+      masked_ids.set_shape(unmasked_inputs.input_ids.shape)
+      masked_inputs = pretrain_data.Inputs(
+        input_ids=masked_ids,
+        input_mask=unmasked_inputs.input_mask,
+        segment_ids=unmasked_inputs.segment_ids,
+        masked_lm_positions=None,
+        masked_lm_ids=None,
+        masked_lm_weights=None,
+      )
+      fake_data = FakedData(
+        inputs=masked_inputs,
+        is_fake_tokens=tf.cast(tf.not_equal(masked_ids, unmasked_inputs.input_ids), tf.int32),
+        sampled_tokens=None,  # used only in evaluation steps
+      )
+      self.total_loss = 0.0
     else:
-      # full-sized masked language model generator if using BERT objective or if
-      # the generator and discriminator have tied weights
-      generator = build_transformer(
-          config, masked_inputs, is_training, self._bert_config,
-          embedding_size=embedding_size)
-      mlm_output = self._get_masked_lm_output(masked_inputs, generator)
-    fake_data = self._get_fake_data(masked_inputs, mlm_output.logits)
-    self.mlm_output = mlm_output
-    self.total_loss = config.gen_weight * (
-        cloze_output.loss if config.two_tower_generator else mlm_output.loss)
+      masked_inputs = pretrain_helpers.mask(
+        config, unmasked_inputs, config.mask_prob)
+      if config.ngram_generator > -1:
+        print('using n_gram: ', config.ngram_generator)
+        if config.ngram_generator > 2:
+          raise NotImplementedError('requested n_gram not implemented yet')
+        if config.ngram_generator > 0 and not config.ngram_generator:
+          raise RuntimeError('Missing path to n_gram file, set via "ngram_pkl_path"')
+        mlm_output = self._get_masked_lm_output(masked_inputs, None)
+      elif ((config.electra_objective or config.electric_objective)
+            and config.untied_generator):
+        generator_config = get_generator_config(config, self._bert_config)
+        if config.two_tower_generator:
+          # two-tower cloze model generator used for electric
+          generator = TwoTowerClozeTransformer(
+              config, generator_config, unmasked_inputs, is_training,
+              embedding_size)
+          cloze_output = self._get_cloze_outputs(unmasked_inputs, generator)
+          mlm_output = get_softmax_output(
+              pretrain_helpers.gather_positions(
+                  cloze_output.logits, masked_inputs.masked_lm_positions),
+              masked_inputs.masked_lm_ids, masked_inputs.masked_lm_weights,
+              self._bert_config.vocab_size)
+        else:
+          # small masked language model generator
+          generator = build_transformer(
+              config, masked_inputs, is_training, generator_config,
+              embedding_size=(None if config.untied_generator_embeddings
+                              else embedding_size),
+              untied_embeddings=config.untied_generator_embeddings,
+              scope="generator")
+          mlm_output = self._get_masked_lm_output(masked_inputs, generator)
+      else:
+        # full-sized masked language model generator if using BERT objective or if
+        # the generator and discriminator have tied weights
+        generator = build_transformer(
+            config, masked_inputs, is_training, self._bert_config,
+            embedding_size=embedding_size)
+        mlm_output = self._get_masked_lm_output(masked_inputs, generator)
+      fake_data = self._get_fake_data(masked_inputs, mlm_output.logits)
+      # self.mlm_output = mlm_output  # never used
+      self.total_loss = config.gen_weight * (
+          cloze_output.loss if config.two_tower_generator else mlm_output.loss)
 
     # Discriminator
     disc_output = None
@@ -279,8 +335,6 @@ class PretrainingModel(object):
           tf.equal(updated_input_ids, inputs.input_ids), tf.int32))
     updated_inputs = pretrain_data.get_updated_inputs(
         inputs, input_ids=updated_input_ids)
-    FakedData = collections.namedtuple("FakedData", [
-        "inputs", "is_fake_tokens", "sampled_tokens"])
     return FakedData(inputs=updated_inputs, is_fake_tokens=labels,
                      sampled_tokens=sampled_tokens)
 
