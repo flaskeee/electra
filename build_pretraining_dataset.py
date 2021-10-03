@@ -135,22 +135,26 @@ class ExampleWriter(object):
         self._writers.append(tf.io.TFRecordWriter(output_fname))
     self.n_written = 0
 
-  def write_examples(self, input_file):
+  def write_examples(self, input_file, is_lines=False):
     """Writes out examples from the provided input file."""
-    with tf.io.gfile.GFile(input_file) as f:
-      for line in f:
-        line = line.strip()
-        if line or self._blanks_separate_docs:
-          example = self._example_builder.add_line(line)
-          if example:
-            self._writers[self.n_written % len(self._writers)].write(
-                example.SerializeToString())
-            self.n_written += 1
-      example = self._example_builder.add_line("")
-      if example:
-        self._writers[self.n_written % len(self._writers)].write(
-            example.SerializeToString())
-        self.n_written += 1
+    if is_lines:
+      f = input_file
+    else:
+      f = tf.io.gfile.GFile(input)
+
+    for line in f:
+      line = line.strip()
+      if line or self._blanks_separate_docs:
+        example = self._example_builder.add_line(line)
+        if example:
+          self._writers[self.n_written % len(self._writers)].write(
+              example.SerializeToString())
+          self.n_written += 1
+    example = self._example_builder.add_line("")
+    if example:
+      self._writers[self.n_written % len(self._writers)].write(
+          example.SerializeToString())
+      self.n_written += 1
 
   def finish(self):
     for writer in self._writers:
