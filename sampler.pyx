@@ -13,7 +13,7 @@ cdef inline Py_ssize_t sample_from(const float[:] distr) nogil:
     cdef Py_ssize_t max_i = len(distr) - 1
     if max_i <= 0:
         return 0
-    cdef float r = rand() / RAND_MAX
+    cdef float r = <float> rand() / <float> RAND_MAX
     cdef float cumulated_density = distr[0]
     cdef Py_ssize_t i = 0
     while r > cumulated_density and i < max_i:
@@ -37,7 +37,7 @@ def sample_zerogram(
     cdef int input_len = fake_inputs_ids_view.size
     for i in range(input_len):
         if rand() < mask_prob * RAND_MAX:
-            fake_inputs_ids_view[i] = <int> ((rand() / RAND_MAX) * max_id)
+            fake_inputs_ids_view[i] = <int> ((<float> rand() / <float> RAND_MAX) * max_id)
 
     return fake_inputs_ids
 
@@ -82,6 +82,7 @@ def sample_bigram(
     for i in range(1, input_len):
         if rand() < mask_prob * RAND_MAX:
             prev_token_id = input_ids_view[i-1]
+            print(prev_token_id,<Py_ssize_t> prev_token_id)
             fake_inputs_ids_view[i] = <int> sample_from(
                 bigram_view[<Py_ssize_t> prev_token_id]
             )
