@@ -24,6 +24,7 @@ def main(
 
     for f in glob.glob(input_files):
         example_writer.write_examples(open(f), is_lines=True)
+    print('done!')
 
 
 if __name__ == '__main__':

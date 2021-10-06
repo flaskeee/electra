@@ -88,7 +88,12 @@ class PretrainingModel(object):
         word_count /= word_count.sum()
         sampler_fn = lambda in_ids: sampler.sample_monogram(in_ids, word_count, config.mask_prob)
       elif config.ngram_generator == 2:
-        word_count = (word_count + 1) / np.sum(word_count, axis=1, keepdims=True)
+        np.add(word_count, 1, out=word_count)
+        np.divide(
+                word_count,
+                np.sum(word_count, axis=1, keepdims=True),
+                out=word_count
+        )
         sampler_fn = lambda in_ids: sampler.sample_bigram(in_ids, word_count, config.mask_prob)
       else:
         raise NotImplementedError('N-grams larger than 2 are not implemented')
@@ -523,7 +528,7 @@ def train_or_eval(config: configure_pretraining.PretrainingConfig):
   if config.do_train:
     utils.heading("Running training")
     estimator.train(input_fn=pretrain_data.get_input_fn(config, True),
-                    max_steps=config.num_train_steps)
+                    max_steps=150000,) #config.num_train_steps)
   if config.do_eval:
     utils.heading("Running evaluation")
     result = estimator.evaluate(
