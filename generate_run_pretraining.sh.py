@@ -13,14 +13,15 @@ def generate_run_name(d: dict):
     return '.'.join(out)
 
 
-def get_ngram_options(n, cython_generator):
+def get_ngram_options(n, cython_generator, progressive_ngram):
     if n < 0:
         return {}
     else:
         return {
             'ngram_generator': n,
             'ngram_pkl_path': f'owt_{n}_gram.pkl',
-            'cython_generator': True
+            'cython_generator': True,
+            'progressive_ngram': progressive_ngram,
         }
 
 def get_pretrain_data_options(pretrain_data):
@@ -30,9 +31,9 @@ def get_pretrain_data_options(pretrain_data):
         return {
                 'pretrain_tfrecords': \
                         {
-                            'mimic_iii': 'pretrain_data/mimic_iii.tfrecords',
-                            'owt': 'pretrain_data/owt.tfrecords',
-                        }[pretrain_data]
+                            'mimic_iii': 'pretraining_data/mimic_iii.tfrecords',
+                            'owt': 'pretraining_data/owt.tfrecords',
+                        }[pretrain_data] + '/pretrain_data.tfrecord*'
                }
 
 
@@ -54,6 +55,8 @@ PY=`which python`
 
 DATA_DIR=/xdisk/bethard/jiachengz/electra_pretraining/pretrain_data
 
+rm -r $DATA_DIR/models/debug
+
 singularity exec --nv /groups/bethard/image/tensorflow_1_15.sif $PY run_pretraining.py --data-dir $DATA_DIR \\
     --model-name {run_name} \\
     --hparams '{json.dumps(options)}'
@@ -62,13 +65,19 @@ singularity exec --nv /groups/bethard/image/tensorflow_1_15.sif $PY run_pretrain
 
 def main(
         ngram=-1,
+        progressive_ngram=False,
         cython_generator=True,
         pretrain_data='owt',
+        debug=False,
 ):
-    run_name = generate_run_name(locals())
+    cmd_options = dict(locals())
+    if cmd_options.pop('debug'):
+        run_name = 'debug'
+    else:
+        run_name = generate_run_name(cmd_options)
     options = {}
     options.update(
-        get_ngram_options(ngram, cython_generator)
+        get_ngram_options(ngram, cython_generator, progressive_ngram)
     )
     options.update(
         get_pretrain_data_options(pretrain_data)

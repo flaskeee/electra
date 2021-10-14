@@ -22,6 +22,10 @@ cdef inline Py_ssize_t sample_from(const float[:] distr) nogil:
     return i
 
 
+cdef inline int sample_int(const int inclusive_max):
+    return <int> ((<float> rand() / <float> RAND_MAX) * inclusive_max)
+
+
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
 def sample_zerogram(
@@ -37,8 +41,7 @@ def sample_zerogram(
     cdef int input_len = fake_inputs_ids_view.size
     for i in range(input_len):
         if rand() < mask_prob * RAND_MAX:
-            fake_inputs_ids_view[i] = <int> ((<float> rand() / <float> RAND_MAX) * max_id)
-
+            fake_inputs_ids_view[i] = sample_int(max_id)
     return fake_inputs_ids
 
 
@@ -85,5 +88,36 @@ def sample_bigram(
             fake_inputs_ids_view[i] = <int> sample_from(
                 bigram_view[<Py_ssize_t> prev_token_id]
             )
+
+    return fake_inputs_ids
+
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.
+def sample_zero_bigram(
+        np.ndarray input_ids,
+        np.ndarray bigram,
+        float mask_prob,
+        float bigram_prob,
+):
+    cdef int max_id = len(bigram) - 1
+    cdef np.ndarray fake_inputs_ids = np.copy(input_ids)
+
+    cdef int[:] input_ids_view = input_ids.reshape(-1)
+    cdef int[:] fake_inputs_ids_view = fake_inputs_ids.reshape(-1)
+    cdef float[:,:] bigram_view = bigram
+
+    cdef Py_ssize_t i
+    cdef int prev_token_id
+    cdef int input_len = input_ids_view.size
+    for i in range(1, input_len):
+        if input_ids_view[i] != 0 and rand() < mask_prob * RAND_MAX:
+            if rand() < bigram_prob * RAND_MAX:
+                prev_token_id = input_ids_view[i-1]
+                fake_inputs_ids_view[i] = <int> sample_from(
+                    bigram_view[<Py_ssize_t> prev_token_id]
+                )
+            else:
+                fake_inputs_ids_view[i] = sample_int(max_id)
 
     return fake_inputs_ids

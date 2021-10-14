@@ -81,12 +81,12 @@ class PretrainingModel(object):
       if config.ngram_generator > 0:
         word_count = pickle.load(open(config.ngram_pkl_path, 'rb')).astype(np.float32)
       if config.ngram_generator == 0:
-        sampler_fn = lambda in_ids: sampler.sample_zerogram(in_ids, config.vocab_size-1, config.mask_prob)
+        sampler_fn = lambda in_ids, step: sampler.sample_zerogram(in_ids, config.vocab_size-1, config.mask_prob)
       elif config.ngram_generator == 1:
         ignore_thrd = np.sort(word_count.reshape(-1))[-30]
         word_count[word_count > ignore_thrd] = 0
         word_count /= word_count.sum()
-        sampler_fn = lambda in_ids: sampler.sample_monogram(in_ids, word_count, config.mask_prob)
+        sampler_fn = lambda in_ids, step: sampler.sample_monogram(in_ids, word_count, config.mask_prob)
       elif config.ngram_generator == 2:
         np.add(word_count, 1, out=word_count)
         np.divide(
@@ -94,13 +94,16 @@ class PretrainingModel(object):
                 np.sum(word_count, axis=1, keepdims=True),
                 out=word_count
         )
-        sampler_fn = lambda in_ids: sampler.sample_bigram(in_ids, word_count, config.mask_prob)
+        if config.progressive_ngram:
+            sampler_fn = lambda in_ids, step: sampler.sample_zero_bigram(in_ids, word_count, config.mask_prob, step.item()/150000)
+        else:
+            sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob)
       else:
         raise NotImplementedError('N-grams larger than 2 are not implemented')
 
       masked_ids = tf.numpy_function(
         sampler_fn,
-        [unmasked_inputs.input_ids],
+        [unmasked_inputs.input_ids, tf.train.get_or_create_global_step()],
         tf.int32
       )
       masked_ids.set_shape(unmasked_inputs.input_ids.shape)
@@ -515,7 +518,7 @@ def train_or_eval(config: configure_pretraining.PretrainingConfig):
       cluster=tpu_cluster_resolver,
       model_dir=config.model_dir,
       save_checkpoints_steps=config.save_checkpoints_steps,
-      keep_checkpoint_max=config.keep_checkpoint_max,
+      keep_checkpoint_max=10000, #config.keep_checkpoint_max,
       tpu_config=tpu_config)
   model_fn = model_fn_builder(config=config)
   estimator = tf.estimator.tpu.TPUEstimator(
