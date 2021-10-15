@@ -27,6 +27,7 @@ class MyTransformer(torch.nn.Module):
 def main(
         weight_path,
         data_dir='',
+        out_dir='',
         batch_size=64,
         seq_len=128,
         device='cuda',
@@ -73,6 +74,8 @@ def main(
     )
     return loss
 
+  out_file = open(out_dir+'/n2c2_ner.txt', 'w')
+
   def eval_worker(model):
     with torch.no_grad():
       positive_negative = nelib.metrics.PositiveNegative()
@@ -86,7 +89,7 @@ def main(
           target_entities = artifacts.concepts[datum_key]
           positive_negative.update(target_entities, pred_entities)
         if debug: break
-      print(nelib.metrics.f1(**positive_negative.counter)); exit(12)
+      out_file.write(str(nelib.metrics.f1(**positive_negative.counter)) + '\n')
 
 
 
