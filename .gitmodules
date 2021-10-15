@@ -1,0 +1,6 @@
+[submodule "nn_utils"]
+	path = nn_utils
+	url = git@github.com:flaskeee/nn_utils.git
+[submodule "nelib"]
+	path = nelib
+	url = git@github.com:flaskeee/nelib.git
