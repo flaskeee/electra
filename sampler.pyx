@@ -72,6 +72,7 @@ def sample_bigram(
         np.ndarray input_ids,
         np.ndarray bigram,
         float mask_prob,
+        bint wrong_bigram,
 ):
     cdef np.ndarray fake_inputs_ids = np.copy(input_ids)
 
@@ -85,6 +86,8 @@ def sample_bigram(
     for i in range(1, input_len):
         if rand() < mask_prob * RAND_MAX:
             prev_token_id = input_ids_view[i-1]
+            if wrong_bigram and prev_token_id > 0:
+                prev_token_id -= 1
             fake_inputs_ids_view[i] = <int> sample_from(
                 bigram_view[<Py_ssize_t> prev_token_id]
             )
@@ -121,3 +124,4 @@ def sample_zero_bigram(
                 fake_inputs_ids_view[i] = sample_int(max_id)
 
     return fake_inputs_ids
+

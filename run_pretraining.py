@@ -97,7 +97,7 @@ class PretrainingModel(object):
         if config.progressive_ngram:
             sampler_fn = lambda in_ids, step: sampler.sample_zero_bigram(in_ids, word_count, config.mask_prob, step.item()/150000)
         else:
-            sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob)
+            sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob, config.wrong_ngram)
       else:
         raise NotImplementedError('N-grams larger than 2 are not implemented')
 

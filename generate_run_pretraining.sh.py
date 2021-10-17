@@ -13,7 +13,7 @@ def generate_run_name(d: dict):
     return '.'.join(out)
 
 
-def get_ngram_options(n, cython_generator, progressive_ngram):
+def get_ngram_options(n, cython_generator, progressive_ngram, wrong_ngram):
     if n < 0:
         return {}
     else:
@@ -22,6 +22,7 @@ def get_ngram_options(n, cython_generator, progressive_ngram):
             'ngram_pkl_path': f'owt_{n}_gram.pkl',
             'cython_generator': True,
             'progressive_ngram': progressive_ngram,
+            'wrong_ngram': wrong_ngram
         }
 
 def get_pretrain_data_options(pretrain_data):
@@ -68,6 +69,7 @@ def main(
         progressive_ngram=False,
         cython_generator=True,
         pretrain_data='owt',
+        wrong_ngram=False,
         debug=False,
 ):
     cmd_options = dict(locals())
@@ -77,7 +79,7 @@ def main(
         run_name = generate_run_name(cmd_options)
     options = {}
     options.update(
-        get_ngram_options(ngram, cython_generator, progressive_ngram)
+        get_ngram_options(ngram, cython_generator, progressive_ngram, wrong_ngram)
     )
     options.update(
         get_pretrain_data_options(pretrain_data)
