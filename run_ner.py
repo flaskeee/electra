@@ -52,14 +52,14 @@ def main(
     batch_size=batch_size,
     shuffle=True,
     drop_last=True,
-    num_workers=4,
+    num_workers=0 if debug else 4,
   )
   devel_dataloader = DataLoader(
     torch.utils.data.Subset(whole_dataset, data_indices[train_devel_cutoff:]),
     batch_size=batch_size*4,
     shuffle=False,
     drop_last=True,
-    num_workers=4,
+    num_workers=0 if debug else 4,
   )
 
   model = MyTransformer(electra, len(artifacts.bio_converter.idx2label))
@@ -90,7 +90,6 @@ def main(
           positive_negative.update(target_entities, pred_entities)
         if debug: break
       out_file.write(str(nelib.metrics.f1(**positive_negative.counter)) + '\n')
-
 
 
   script.train(
