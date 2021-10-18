@@ -63,11 +63,13 @@ for model_path in sys.stdin:
     model_rec = {'model': model_name}
 
     for result_f_path in (model_path/'results').glob('*.txt'):
-        task, score = re.match(
+        m = re.match(
                 '(?P<task>\w+):[^0-9]+(?P<score>[0-9.]+).+',
                 open(result_f_path).read(),
-             ).groups(('task', 'score'))
-        model_rec[task] = score
+             )
+        if m is not None:
+            task, score = m.groups(('task', 'score'))
+            model_rec[task] = score
     records.append(model_rec)
 
 
