@@ -27,4 +27,4 @@ hparam="{\"task_names\": [\"$task_name\"]}"
 singularity exec --nv /groups/bethard/image/tensorflow_1_15.sif $PY run_ner.py \
     --weight_path=$MODEL_DIR \
     --data_dir=$DATA_DIR \
-    --out_dir=./  # $MODEL_DIR/results
+    --out_dir=$MODEL_DIR/results
