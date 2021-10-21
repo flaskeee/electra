@@ -82,12 +82,14 @@ def sample_bigram(
 
     cdef Py_ssize_t i
     cdef int prev_token_id
+    cdef int curr_token_id
     cdef int input_len = input_ids_view.size
     for i in range(1, input_len):
-        if rand() < mask_prob * RAND_MAX:
-            prev_token_id = input_ids_view[i-1]
-            if wrong_bigram and prev_token_id > 0:
-                prev_token_id -= 1
+        prev_token_id = input_ids_view[i-1]
+        curr_token_id = input_ids_view[i]
+        if curr_token_id and rand() < mask_prob * RAND_MAX:
+            if wrong_bigram:
+                prev_token_id = curr_token_id - 1
             fake_inputs_ids_view[i] = <int> sample_from(
                 bigram_view[<Py_ssize_t> prev_token_id]
             )
