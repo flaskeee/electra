@@ -1,5 +1,6 @@
 import sys
 from pandas import DataFrame as df
+import pandas as pd
 from pathlib import Path
 import regex as re
 from collections import defaultdict, namedtuple
@@ -73,6 +74,7 @@ for model_path in sys.stdin:
     records.append(model_rec)
 
 
+pd.set_option('display.max_colwidth', None)
 table = df.from_records(records, index='model')
 table = table.sort_index(axis=0).sort_index(axis=1)
 print(table)

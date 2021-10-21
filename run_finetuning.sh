@@ -14,9 +14,8 @@ eval "$(conda shell.bash hook)"
 conda activate tf1
 PY=`which python`
 
-run_name=$1
-task_name=$2
-model_name=$3
+task_name=$1
+model_name=$2
 
 DATA_DIR=/xdisk/bethard/jiachengz/electra_pretraining/pretrain_data
 hparam="{\"task_names\": [\"$task_name\"]}"
