@@ -42,6 +42,8 @@ def main(
       weight_path,
     )
     tokenizer = AutoTokenizer.from_pretrained("google/electra-small-discriminator", use_fast=True)  # Need to be changed for custom token vocab
+  electra = AutoModel.from_pretrained('bert-base-uncased')
+  tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=True)  # Need to be changed for custom token vocab
 
   whole_dataset, artifacts = load_n2c2.load_ner(data_dir, tokenizer, seq_len)
   data_indices = list(range(len(whole_dataset)))
@@ -90,6 +92,7 @@ def main(
           positive_negative.update(target_entities, pred_entities)
         if debug: break
       out_file.write(str(nelib.metrics.f1(**positive_negative.counter)) + '\n')
+      out_file.flush()
 
 
   script.train(
@@ -97,6 +100,7 @@ def main(
     dataloader=train_dataloader,
     data2loss=data2loss,
     eval_worker=eval_worker,
+    num_train_epochs=100,
     device=device,
     debug=debug,
   )
