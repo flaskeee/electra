@@ -70,6 +70,7 @@ def main(
         cython_generator=True,
         pretrain_data='owt',
         wrong_ngram=False,
+        ngram_mod='none',
         debug=False,
 ):
     cmd_options = dict(locals())
@@ -84,6 +85,7 @@ def main(
     options.update(
         get_pretrain_data_options(pretrain_data)
     )
+    options['ngram_mod'] = ngram_mod
 
     return generate_script(options, run_name)
 

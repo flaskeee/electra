@@ -92,7 +92,7 @@ class PretrainingModel(object):
           dtype = word_count.dtype
           word_count = (np.random.random_sample(word_count.shape) < 0.05).astype(dtype)
         elif config.ngram_mod == 'no_freq_bigram':
-          thrd = np.sort(word_count, axis=1)[:, 30:31]
+          thrd = np.sort(word_count, axis=1)[:, -31:30]
           word_count[word_count>thrd] = 0
         elif config.ngram_mod == 'none':
           pass
