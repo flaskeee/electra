@@ -88,6 +88,16 @@ class PretrainingModel(object):
         word_count /= word_count.sum()
         sampler_fn = lambda in_ids, step: sampler.sample_monogram(in_ids, word_count, config.mask_prob)
       elif config.ngram_generator == 2:
+        if config.ngram_mod == 'rand_bigram':
+          dtype = word_count.dtype
+          word_count = (np.random.random_sample(word_count.shape) < 0.05).astype(dtype)
+        elif config.ngram_mod == 'no_freq_bigram':
+          thrd = np.sort(word_count, axis=1)[:, 30:31]
+          word_count[word_count>thrd] = 0
+        elif config.ngram_mod == 'none':
+          pass
+        else:
+          raise RuntimeError('Unknown ngram_mod:', config.ngram_mod)
         np.add(word_count, 1, out=word_count)
         np.divide(
                 word_count,
