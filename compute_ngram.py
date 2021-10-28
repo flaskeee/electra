@@ -79,6 +79,24 @@ def bi_gram(
     return counter
 
 
+def cos(
+    samples: Iterable[Iterable[int]],
+    vocab_size: int,
+    look_back: int,
+    look_forward: int,
+):
+    from cos_similarity import count_context
+    counts = count_context(samples, vocab_size, look_back, look_forward)
+    counts_float = counts.astype(np.float32)
+    norm = np.sqrt(
+        np.sum(counts ** 2, axis=1, keepdims=True)
+    ).astype(np.float32)
+    norm_product = norm @ norm.T
+    similarity = (counts_float @ counts_float.T) / norm_product
+    np.fill_diagonal(similarity, 0)
+    return similarity
+
+
 def pickle_output(fn, out_path):
     def wrapped(*args, **kwargs):
         pickle.dump(
@@ -89,10 +107,12 @@ def pickle_output(fn, out_path):
 
 
 class Launcher:
-    def __init__(self, in_path, vocab_size: int, out_path='out.pkl',):
+    def __init__(self, in_path, vocab_size: int, out_path='out.pkl', look_back=1, look_forward=1):
         self.sample_generator = parse_tfrecords_for_ids(in_path)
         self.output_path = out_path
         self.vocab_size = int(vocab_size)
+        self.look_back = look_back
+        self.look_forward = look_forward
 
     def monogram(self,):
         pickle_output(mono_gram, out_path=self.output_path)(samples=self.sample_generator, vocab_size=self.vocab_size)
@@ -100,6 +120,13 @@ class Launcher:
     def bigram(self,):
         pickle_output(bi_gram, out_path=self.output_path)(samples=self.sample_generator, vocab_size=self.vocab_size)
 
+    def cos(self,):
+        pickle_output(cos, out_path=self.output_path)(
+            samples=self.sample_generator,
+            vocab_size=self.vocab_size,
+            look_back=self.look_back,
+            look_forward=self.look_forward,
+        )
 
 if __name__ == '__main__':
     import fire
