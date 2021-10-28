@@ -73,6 +73,7 @@ class PretrainingConfig(object):
     self.ngram_generator = -1  # generate from n_gram,
     self.ngram_pkl_path = ''  #
     self.wrong_ngram = False
+    self.ngram_mod = 'none'
     self.progressive_ngram = False
     self.two_tower_generator = False  # generator is a two-tower cloze model
     self.untied_generator_embeddings = False  # tie generator/discriminator
