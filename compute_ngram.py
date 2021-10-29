@@ -94,6 +94,7 @@ def cos(
     norm_product = norm @ norm.T
     similarity = (counts_float @ counts_float.T) / norm_product
     np.fill_diagonal(similarity, 0)
+    np.nan_to_num(similarity, copy=False)
     return similarity
 
 

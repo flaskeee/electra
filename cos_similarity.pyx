@@ -29,7 +29,7 @@ def count_context(
       counts_to_update = counts_view[curr_window[curr_window_center]]
       curr_window[curr_window_i] = curr_id
       for curr_window_j in range(window_size):
-        if curr_window_j != curr_window_center:
+        if curr_window[curr_window_j] and curr_window_j != curr_window_center:  # avoid counting [PAD]
           counts_to_update[curr_window[curr_window_j]] += 1
       curr_window_i = (curr_window_i + 1) % window_size
 
