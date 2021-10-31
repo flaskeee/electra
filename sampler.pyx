@@ -127,3 +127,28 @@ def sample_zero_bigram(
 
     return fake_inputs_ids
 
+
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.
+def sample_cos(
+        np.ndarray input_ids,
+        np.ndarray cos,
+        float mask_prob,
+):
+    cdef np.ndarray fake_inputs_ids = np.copy(input_ids)
+
+    cdef int[:] input_ids_view = input_ids.reshape(-1)
+    cdef int[:] fake_inputs_ids_view = fake_inputs_ids.reshape(-1)
+    cdef float[:,:] cos_view = cos
+
+    cdef Py_ssize_t i
+    cdef int curr_token_id
+    cdef int input_len = input_ids_view.size
+    for i in range(1, input_len):
+        curr_token_id = input_ids_view[i]
+        if curr_token_id and rand() < mask_prob * RAND_MAX:
+            fake_inputs_ids_view[i] = <int> sample_from(
+                cos_view[<Py_ssize_t> curr_token_id]
+            )
+
+    return fake_inputs_ids

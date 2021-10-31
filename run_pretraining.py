@@ -77,9 +77,10 @@ class PretrainingModel(object):
         - fake token prob calculation (`PretrainingModel._get_masked_lm_output`, `get_softmax_output`
         - fake token sampling / fake input generation  (`PretrainingModel._get_fake_data`)
     """
-    if config.cython_generator and config.ngram_generator > -1:
-      if config.ngram_generator > 0:
-        word_count = pickle.load(open(config.ngram_pkl_path, 'rb')).astype(np.float32)
+    if config.cython_generator and (config.ngram_generator > -1 or config.cos_generator):
+      if config.ngram_generator > -1 and config.cos_generator:
+        raise RuntimeError('Cannot specify ngram_generator > -1 and cos_generator > -1 at the same time')
+      word_count = pickle.load(open(config.word_count_pkl_path, 'rb')).astype(np.float32)
       if config.ngram_generator == 0:
         sampler_fn = lambda in_ids, step: sampler.sample_zerogram(in_ids, config.vocab_size-1, config.mask_prob)
       elif config.ngram_generator == 1:
@@ -108,6 +109,15 @@ class PretrainingModel(object):
             sampler_fn = lambda in_ids, step: sampler.sample_zero_bigram(in_ids, word_count, config.mask_prob, step.item()/150000)
         else:
             sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob, config.wrong_ngram)
+      elif config.cos_generator:
+        np.add(word_count, 1, out=word_count)
+        np.divide(
+                word_count,
+                np.sum(word_count, axis=1, keepdims=True),
+                out=word_count
+        )
+        sampler_fn = lambda in_ids, step: sampler.sample_cos(in_ids, word_count, config.mask_prob)
+        
       else:
         raise NotImplementedError('N-grams larger than 2 are not implemented')
 
@@ -139,7 +149,7 @@ class PretrainingModel(object):
         if config.ngram_generator > 2:
           raise NotImplementedError('requested n_gram not implemented yet')
         if config.ngram_generator > 0 and not config.ngram_generator:
-          raise RuntimeError('Missing path to n_gram file, set via "ngram_pkl_path"')
+          raise RuntimeError('Missing path to word_count file, set via "word_count_pkl_path"')
         mlm_output = self._get_masked_lm_output(masked_inputs, None)
       elif ((config.electra_objective or config.electric_objective)
             and config.untied_generator):
@@ -249,7 +259,7 @@ class PretrainingModel(object):
       if self._config.ngram_generator >= 0:
         if self._config.ngram_generator > 0:
           word_count = pickle.load(
-              open(self._config.ngram_pkl_path, 'rb')
+              open(self._config.word_count_pkl_path, 'rb')
           )
         if self._config.ngram_generator < 2:
           if self._config.ngram_generator == 0:

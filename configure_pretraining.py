@@ -70,8 +70,9 @@ class PretrainingConfig(object):
     self.uniform_generator = False  # generator is uniform at random
     """
     self.cython_generator = False
+    self.cos_generator = False
     self.ngram_generator = -1  # generate from n_gram,
-    self.ngram_pkl_path = ''  #
+    self.word_count_pkl_path = ''  #
     self.wrong_ngram = False
     self.ngram_mod = 'none'
     self.progressive_ngram = False
