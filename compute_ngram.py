@@ -10,7 +10,9 @@ from multiprocessing import pool
 from functools import partial
 
 import tensorflow as tf
-tf.enable_eager_execution()
+
+from tf_utils import parse_tfrecords_for_ids
+
 
 
 '''
@@ -23,22 +25,6 @@ es = [
 e_ids: List[int] = tf.train.Example.FromString(es[0]).features.feature['input_ids'].int64_list.value
 '''
 
-
-def parse_tfrecords_for_ids(path: Union[str, Path]) -> Iterable[List[int]]:
-    """
-    Returns an iterable of List of ids
-    """
-    if isinstance(path, str):
-        path = Path(path)
-
-    records = list(path.iterdir()) if path.is_dir() else [path]
-    return chain.from_iterable(
-        (
-            tf.train.Example.FromString(e).features.feature['input_ids'].int64_list.value
-            for e in tf.python_io.tf_record_iterator(str(r_path))  # tf.data.TFRecordDataset(str(r_path))
-        )
-        for r_path in tqdm(records)
-    )
 
 
 def parallelize_ngram(fn, aggregate_fn=sum):
@@ -109,7 +95,7 @@ def pickle_output(fn, out_path):
 
 class Launcher:
     def __init__(self, in_path, vocab_size: int, out_path='out.pkl', look_back=1, look_forward=1):
-        self.sample_generator = parse_tfrecords_for_ids(in_path)
+        self.sample_generator = parse_tfrecords_for_ids(in_path, progress_bar=True)
         self.output_path = out_path
         self.vocab_size = int(vocab_size)
         self.look_back = look_back
