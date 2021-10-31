@@ -8,7 +8,6 @@ from tqdm import tqdm
 import tensorflow as tf
 from typing import Union, Iterable, List
 
-tf.enable_eager_execution()
 
 
 def parse_tfrecords_for_ids(path: Union[str, Path], progress_bar=False) -> Iterable[List[int]]:
@@ -73,5 +72,6 @@ def ckpt_iter(ckpt_path) -> Path:
 
 
 if __name__ == '__main__':
+  tf.enable_eager_execution()
   ci = iter(ckpt_iter(
     '/Users/zjc/Dropbox/nlp/particularly_expensive/electra/pretraining_data/models/ngram_generator=2.ngram_pkl_path=owt_2_gram.pkl'))

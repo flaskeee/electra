@@ -14,6 +14,7 @@ import tensorflow as tf
 from tf_utils import parse_tfrecords_for_ids
 
 
+tf.enable_eager_execution()
 
 '''
 path = '/xdisk/bethard/jiachengz/electra_pretraining/openwebtext/pretrain_tfrecords/pretrain_data.tfrecord-9-of-1000'
