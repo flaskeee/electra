@@ -199,6 +199,12 @@ def electra_mlm(
         rest_tf_names: Sequence[str],
         tf_weight: np.ndarray,
 ):
+  # ELECTRA MLM head starts with 'generator_predictions/'
+  # generator_predictions/LayerNorm || m.generator_predictions.LayerNorm
+  # generator_predictions/dense || m.generator_predictions.dense
+  #
+  # for m.generator_lm_head:
+  #  weight comes from word embedding matrix
   # scores are product of hidden and embedding vectors plus learnt bias
   torch_module.generator_lm_head.weight = torch_module.electra.embeddings.word_embeddings.weight
   try:
