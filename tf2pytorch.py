@@ -11,7 +11,7 @@ import tensorflow as tf
 from transformers.models.electra import modeling_electra
 
 
-def load_electra(target_model: Union[str,], ckpt_path: str, discriminator_or_generator='discriminator'):
+def load_electra(target_model: Union[str, nn.Module], ckpt_path: str, discriminator_or_generator='discriminator'):
   if isinstance(target_model, str):
     target_model = modeling_electra.ElectraModel.from_pretrained(target_model)
   parameters_before_loading = {
@@ -23,15 +23,15 @@ def load_electra(target_model: Union[str,], ckpt_path: str, discriminator_or_gen
     for k, _ in tf.train.list_variables(ckpt_path)
   }
 
-  disc_generator_filtering_re = r'(electra/embeddings)|' + {
+  weight_filtering_re = r'^(electra/embeddings)|(generator_predictions)|' + {
     'discriminator': r'(electra)',
     'generator': r'(generator)',
   }[discriminator_or_generator]
   for k, v in tf_weights.items():
-    if re.match(disc_generator_filtering_re, k):
+    if re.match(weight_filtering_re, k):
       try:
-        rest_tf_names = k.split('/')[1:]
-        load_weight(target_model, rest_tf_names, v)
+        curr_tf_name, *rest_tf_names = k.split('/')
+        load_weight(target_model, curr_tf_name, rest_tf_names, v)
       except NoMatchError:
         pass
 
@@ -62,7 +62,7 @@ def copy_np_to_torch(np_arr: np.ndarray, torch_arr: torch.tensor):
     torch_arr[:] = torch.from_numpy(np_arr)
 
 @singledispatch
-def load_weight(module, rest_tf_names: Sequence[str], tf_weight: np.ndarray):
+def load_weight(module, curr_tf_name: str, rest_tf_names: Sequence[str], tf_weight: np.ndarray):
   """
   @param module: current pytorch_module to be loaded
   @param rest_tf_names: the sequence of tf (scope/variable) names that starts from the child of current module
@@ -81,6 +81,7 @@ def load_weight(module, rest_tf_names: Sequence[str], tf_weight: np.ndarray):
 @load_weight.register
 def _load_parameter(
         torch_weight: torch.nn.Parameter,
+        curr_tf_name: str,
         rest_tf_names: Sequence[str],
         tf_weight: np.ndarray,
 ):
@@ -96,16 +97,18 @@ def _load_parameter(
 @load_weight.register
 def _load_embedding(
         torch_module: torch.nn.Embedding,
+        curr_tf_name: str,
         rest_tf_names: Sequence[str],
         tf_weight: np.ndarray,
 ):
-  load_weight(torch_module.weight, rest_tf_names, tf_weight)
+  load_weight(torch_module.weight, curr_tf_name, rest_tf_names, tf_weight)
 
 
 @load_weight.register(torch.nn.LayerNorm)
 @load_weight.register(torch.nn.Linear)
 def _load_builtin_layer_weight(
         torch_module: Union[torch.nn.LayerNorm, torch.nn.Linear],
+        curr_tf_name: str,
         rest_tf_names: Sequence[str],
         tf_weight: np.ndarray,
 ):
@@ -123,12 +126,13 @@ def _load_builtin_layer_weight(
   torch_weight = getattr(torch_module, torch_weight_name)
   if isinstance(torch_module, torch.nn.Linear) and child_tf_name == 'kernel':
     tf_weight = np.transpose(tf_weight)
-  load_weight(torch_weight, child_rest_tf_names, tf_weight)
+  load_weight(torch_weight, child_tf_name, child_rest_tf_names, tf_weight)
 
 
 @load_weight.register
 def electra_encoder(
         torch_module: modeling_electra.ElectraEncoder,
+        curr_tf_name: str,
         rest_tf_names: Sequence[str],
         tf_weight: np.ndarray,
 ):
@@ -145,7 +149,7 @@ def electra_encoder(
     while not isinstance(child_module, (nn.Linear, nn.LayerNorm)):
       child_tf_name, *child_rest_tf_names = child_rest_tf_names
       child_module = getattr(child_module, child_tf_name)
-    load_weight(child_module, child_rest_tf_names, tf_weight)
+    load_weight(child_module, child_tf_name, child_rest_tf_names, tf_weight)
   except (ValueError, AttributeError):
     raise NoMatchError(torch_module, rest_tf_names)
 
@@ -153,6 +157,7 @@ def electra_encoder(
 @load_weight.register(modeling_electra.ElectraModel)
 def electra_model(
         torch_module: modeling_electra.ElectraModel,
+        curr_tf_name: str,
         rest_tf_names: Sequence[str],
         tf_weight: np.ndarray,
 ):
@@ -160,6 +165,7 @@ def electra_model(
     child_tf_name, *child_rest_tf_names = rest_tf_names
     load_weight(
       getattr(torch_module, child_tf_name),  # name as are aligned between tf and torch
+      child_tf_name,
       child_rest_tf_names,
       tf_weight,
     )
@@ -170,6 +176,7 @@ def electra_model(
 @load_weight.register
 def electra_embeddings(
         torch_module: modeling_electra.ElectraEmbeddings,
+        curr_tf_name: str,
         rest_tf_names: Sequence[str],
         tf_weight: np.ndarray,
 ):
@@ -177,6 +184,44 @@ def electra_embeddings(
     child_tf_name, *child_rest_tf_names = rest_tf_names
     load_weight(
       getattr(torch_module, child_tf_name),
+      child_tf_name,
+      child_rest_tf_names,
+      tf_weight,
+    )
+  except (ValueError, AttributeError):
+    raise NoMatchError(torch_module, rest_tf_names)
+
+
+@load_weight.register
+def electra_mlm(
+        torch_module: modeling_electra.ElectraForMaskedLM,
+        curr_tf_name: str,
+        rest_tf_names: Sequence[str],
+        tf_weight: np.ndarray,
+):
+  # scores are product of hidden and embedding vectors plus learnt bias
+  torch_module.generator_lm_head.weight = torch_module.electra.embeddings.word_embeddings.weight
+  try:
+    if curr_tf_name == 'generator_predictions':
+      child_tf_name, *child_rest_tf_names = rest_tf_names
+      if child_tf_name == 'LayerNorm':
+        child_module = torch_module.generator_predictions.LayerNorm
+      elif child_tf_name == 'dense':
+        torch_module.generator_predictions.dense = nn.Linear(64, 128)  # huggingface got size wrong
+        child_module = torch_module.generator_predictions.dense
+      elif child_tf_name == 'output_bias':
+        child_module = torch_module.generator_lm_head.bias
+      else:
+        raise NoMatchError(torch_module, rest_tf_names)
+    elif curr_tf_name in ('generator', 'electra'):
+      child_module = torch_module.electra
+      child_tf_name = curr_tf_name
+      child_rest_tf_names = rest_tf_names
+    else:
+      raise NoMatchError(torch_module, rest_tf_names)
+    load_weight(
+      child_module,
+      child_tf_name,
       child_rest_tf_names,
       tf_weight,
     )
@@ -186,4 +231,7 @@ def electra_embeddings(
 
 if __name__ == '__main__':
   from sys import argv
-  load_electra('google/electra-small-discriminator', argv[1],)
+  # load_electra('google/electra-small-discriminator', argv[1],)
+  load_electra(
+    modeling_electra.ElectraForMaskedLM.from_pretrained('google/electra-small-discriminator'), argv[1]
+  )
