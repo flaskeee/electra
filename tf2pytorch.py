@@ -8,7 +8,15 @@ import torch
 from torch import nn
 import tensorflow as tf
 
+import transformers
 from transformers.models.electra import modeling_electra
+
+
+def get_electra_generator_config():
+  electra_config = transformers.ElectraConfig.from_pretrained('google/electra-small-generator')
+  electra_config.hidden_size = 64
+  electra_config.intermediate_size = 256
+  return electra_config
 
 
 def load_electra(target_model: Union[str, nn.Module], ckpt_path: str, discriminator_or_generator='discriminator'):
@@ -23,7 +31,7 @@ def load_electra(target_model: Union[str, nn.Module], ckpt_path: str, discrimina
     for k, _ in tf.train.list_variables(ckpt_path)
   }
 
-  weight_filtering_re = r'^(electra/embeddings)|(generator_predictions)|' + {
+  weight_filtering_re = r'^(electra/embeddings/)|(generator_predictions)|' + {
     'discriminator': r'(electra)',
     'generator': r'(generator)',
   }[discriminator_or_generator]
@@ -213,7 +221,7 @@ def electra_mlm(
       if child_tf_name == 'LayerNorm':
         child_module = torch_module.generator_predictions.LayerNorm
       elif child_tf_name == 'dense':
-        torch_module.generator_predictions.dense = nn.Linear(64, 128)  # huggingface got size wrong
+        # torch_module.generator_predictions.dense = nn.Linear(64, 128)  # huggingface got size wrong
         child_module = torch_module.generator_predictions.dense
       elif child_tf_name == 'output_bias':
         child_module = torch_module.generator_lm_head.bias
@@ -238,6 +246,8 @@ def electra_mlm(
 if __name__ == '__main__':
   from sys import argv
   # load_electra('google/electra-small-discriminator', argv[1],)
+  electra_config = get_electra_generator_config()
   load_electra(
-    modeling_electra.ElectraForMaskedLM.from_pretrained('google/electra-small-discriminator'), argv[1]
+    modeling_electra.ElectraForMaskedLM(electra_config), argv[1],
+    'generator'
   )
