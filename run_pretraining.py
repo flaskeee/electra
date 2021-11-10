@@ -116,7 +116,7 @@ class PretrainingModel(object):
                 np.sum(word_count, axis=1, keepdims=True),
                 out=word_count
         )
-        sampler_fn = lambda in_ids, step: sampler.sample_cos(in_ids, word_count, config.mask_prob)
+        sampler_fn = lambda in_ids, step: sampler.sample_by_masked(in_ids, word_count, config.mask_prob)
         
       else:
         raise NotImplementedError('N-grams larger than 2 are not implemented')

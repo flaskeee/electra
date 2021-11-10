@@ -130,7 +130,7 @@ def sample_zero_bigram(
 
 @cython.boundscheck(False)  # Deactivate bounds checking
 @cython.wraparound(False)   # Deactivate negative indexing.
-def sample_cos(
+def sample_by_masked(
         np.ndarray input_ids,
         np.ndarray cos,
         float mask_prob,
