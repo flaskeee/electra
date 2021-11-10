@@ -92,20 +92,20 @@ def cos(
         counts = pickle.load(open(count_file, 'rb'))
     else:
         counts = count_context(samples, vocab_size, look_back, look_forward)
-    counts_float = counts.astype(np.float32)
+    counts_float = counts.astype(np.float64)
 
     if smoothing:
-        for i in np.argsort(np.sum(counts, axis=0))[-20:]:
+        for i in np.argsort(np.sum(counts_float, axis=0))[-20:]:
             counts_float[:, i] = 0
         
     norm = np.sqrt(
-        np.sum(counts ** 2, axis=1, keepdims=True)
+        np.sum(counts_float ** 2, axis=1, keepdims=True)
     ).astype(np.float32)
     norm_product = norm @ norm.T
     similarity = (counts_float @ counts_float.T) / norm_product
     np.fill_diagonal(similarity, 0)
     np.nan_to_num(similarity, copy=False)
-    return similarity
+    return similarity.astype(np.float32)
 
 
 def pickle_output(fn, out_path):
