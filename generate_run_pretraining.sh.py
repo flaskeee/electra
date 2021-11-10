@@ -13,12 +13,12 @@ def generate_run_name(d: dict):
     return '.'.join(out)
 
 
-def get_sampler_options(ngram_generator, cython_generator, progressive_ngram, wrong_ngram, cos_generator):
+def get_sampler_options(ngram_generator, cython_generator, progressive_ngram, wrong_ngram, cos_generator, smoothing):
     assert not (ngram_generator > -1 and cos_generator > -1)
     if ngram_generator > -1:
         return {
             'ngram_generator': n,
-            'word_count_pkl_path': f'owt_{n}_gram.pkl',
+            'word_count_pkl_path': f'pretraining_data/ngram/owt_{n}_gram.pkl',
             'cython_generator': True,
             'progressive_ngram': progressive_ngram,
             'wrong_ngram': wrong_ngram
@@ -26,7 +26,7 @@ def get_sampler_options(ngram_generator, cython_generator, progressive_ngram, wr
     elif cos_generator > -1:
         return {
             'cos_generator': True,
-            'word_count_pkl_path': f'owt_cos_{cos_generator}_{cos_generator}.pkl',
+            'word_count_pkl_path': f"pretraining_data/ngrams/owt_cos_{cos_generator}_{cos_generator}.{'smoothing.' if smoothing else ''}pkl",
         }
     else:
         return {}
@@ -51,7 +51,7 @@ def generate_script(options: dict, run_name: str):
 #SBATCH --partition=standard
 #SBATCH --account=nlp
 
-#SBATCH --ntasks=6
+#SBATCH --ntasks=4
 #SBATCH --time=20:00:00
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
@@ -78,6 +78,7 @@ def main(
         pretrain_data='owt',
         wrong_ngram=False,
         ngram_mod='none',
+        smoothing=False,
         debug=False,
 ):
     cmd_options = dict(locals())
@@ -87,7 +88,7 @@ def main(
         run_name = generate_run_name(cmd_options)
     options = {}
     options.update(
-        get_sampler_options(ngram, cython_generator, progressive_ngram, wrong_ngram, cos_generator)
+        get_sampler_options(ngram, cython_generator, progressive_ngram, wrong_ngram, cos_generator, smoothing)
     )
     options.update(
         get_pretrain_data_options(pretrain_data)

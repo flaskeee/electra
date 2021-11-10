@@ -77,7 +77,7 @@ class PretrainingModel(object):
         - fake token prob calculation (`PretrainingModel._get_masked_lm_output`, `get_softmax_output`
         - fake token sampling / fake input generation  (`PretrainingModel._get_fake_data`)
     """
-    if config.cython_generator and (config.ngram_generator > -1 or config.cos_generator):
+    if (config.cython_generator and config.ngram_generator > -1) or config.cos_generator:
       if config.ngram_generator > -1 and config.cos_generator:
         raise RuntimeError('Cannot specify ngram_generator > -1 and cos_generator > -1 at the same time')
       word_count = pickle.load(open(config.word_count_pkl_path, 'rb')).astype(np.float32)

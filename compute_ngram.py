@@ -9,6 +9,7 @@ from scipy.sparse import dok_matrix
 from multiprocessing import pool
 from functools import partial
 
+from cos_similarity import count_context
 import tensorflow as tf
 tf.enable_eager_execution()
 
@@ -84,10 +85,19 @@ def cos(
     vocab_size: int,
     look_back: int,
     look_forward: int,
+    count_file: str = None,
+    smoothing=False,
 ):
-    from cos_similarity import count_context
-    counts = count_context(samples, vocab_size, look_back, look_forward)
+    if count_file is not None:
+        counts = pickle.load(open(count_file, 'rb'))
+    else:
+        counts = count_context(samples, vocab_size, look_back, look_forward)
     counts_float = counts.astype(np.float32)
+
+    if smoothing:
+        for i in np.argsort(np.sum(counts, axis=0))[-20:]:
+            counts_float[:, i] = 0
+        
     norm = np.sqrt(
         np.sum(counts ** 2, axis=1, keepdims=True)
     ).astype(np.float32)
@@ -108,12 +118,14 @@ def pickle_output(fn, out_path):
 
 
 class Launcher:
-    def __init__(self, in_path, vocab_size: int, out_path='out.pkl', look_back=1, look_forward=1):
+    def __init__(self, in_path, vocab_size: int, out_path='out.pkl', look_back=1, look_forward=1, count_file: str=None, smoothing=False):
         self.sample_generator = parse_tfrecords_for_ids(in_path)
         self.output_path = out_path
         self.vocab_size = int(vocab_size)
         self.look_back = look_back
         self.look_forward = look_forward
+        self.count_file = count_file
+        self.smoothing = smoothing
 
     def monogram(self,):
         pickle_output(mono_gram, out_path=self.output_path)(samples=self.sample_generator, vocab_size=self.vocab_size)
@@ -123,6 +135,16 @@ class Launcher:
 
     def cos(self,):
         pickle_output(cos, out_path=self.output_path)(
+            samples=self.sample_generator,
+            vocab_size=self.vocab_size,
+            look_back=self.look_back,
+            look_forward=self.look_forward,
+            count_file=self.count_file,
+            smoothing=self.smoothing,
+        )
+
+    def count_context(self,):
+        pickle_output(count_context,  out_path=self.output_path)(
             samples=self.sample_generator,
             vocab_size=self.vocab_size,
             look_back=self.look_back,
