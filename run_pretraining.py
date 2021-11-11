@@ -78,6 +78,14 @@ class PretrainingModel(object):
         - fake token sampling / fake input generation  (`PretrainingModel._get_fake_data`)
     """
     if (config.cython_generator and config.ngram_generator > -1) or config.sim_generator:
+      def to_prob_(count):
+        np.divide(
+                count,
+                np.sum(count, axis=1, keepdims=True),
+                out=count,
+        )
+        return np.nan_to_num(count, copy=False)
+
       if config.ngram_generator > -1 and config.sim_generator:
         raise RuntimeError('Cannot specify ngram_generator > -1 and sim_generator > -1 at the same time')
       word_count = pickle.load(open(config.word_count_pkl_path, 'rb')).astype(np.float32)
@@ -110,14 +118,18 @@ class PretrainingModel(object):
         else:
             sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob, config.wrong_ngram)
       elif config.sim_generator:
-        word_count = word_count ** 20
-        np.divide(
-                word_count,
-                np.sum(word_count, axis=1, keepdims=True),
-                out=word_count
-        )
-        word_count = np.nan_to_num(word_count, copy=False)
-        sampler_fn = lambda in_ids, step: sampler.sample_by_masked(in_ids, word_count, config.mask_prob)
+        if config.sim_progressive_alpha:
+          sampler_fn = lambda in_ids, step: sampler.sample_by_masked(
+                  in_ids,
+                  to_prob_(word_count ** (config.sim_alpha * step.item()/150000)),
+                  config.mask_prob
+          )
+        else:
+          np.log(word_count, out=word_count)
+          np.multiply(word_count, config.sim_alpha, out=word_count)
+          np.exp(word_count, out=word_count)
+          word_count = to_prob_(word_count)
+          sampler_fn = lambda in_ids, step: sampler.sample_by_masked(in_ids, word_count, config.mask_prob)
         
       else:
         raise NotImplementedError('N-grams larger than 2 are not implemented')

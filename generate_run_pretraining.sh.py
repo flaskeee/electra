@@ -13,7 +13,7 @@ def generate_run_name(d: dict):
     return '.'.join(out)
 
 
-def get_sampler_options(ngram_generator, cython_generator, progressive_ngram, wrong_ngram, sim_generator, smoothing, sim_metric):
+def get_sampler_options(ngram_generator, cython_generator, progressive_ngram, wrong_ngram, sim_generator, smoothing, sim_metric, sim_alpha, sim_progressive_alpha):
     assert not (ngram_generator > -1 and sim_generator > -1)
     if ngram_generator > -1:
         return {
@@ -26,6 +26,8 @@ def get_sampler_options(ngram_generator, cython_generator, progressive_ngram, wr
     elif sim_generator > -1:
         return {
             'sim_generator': True,
+            'sim_alpha': sim_alpha,
+            'sim_progressive_alpha': sim_progressive_alpha,
             'word_count_pkl_path': f"pretraining_data/ngrams/owt.{sim_metric}_{sim_generator}_{sim_generator}.{'smoothing.' if smoothing else ''}pkl",
         }
     else:
@@ -74,6 +76,8 @@ def main(
         ngram=-1,
         sim_generator=-1,
         sim_metric='',
+        sim_alpha=1,
+        sim_progressive_alpha=False,
         progressive_ngram=False,
         cython_generator=True,
         pretrain_data='owt',
@@ -89,7 +93,7 @@ def main(
         run_name = generate_run_name(cmd_options)
     options = {}
     options.update(
-        get_sampler_options(ngram, cython_generator, progressive_ngram, wrong_ngram, sim_generator, smoothing, sim_metric)
+        get_sampler_options(ngram, cython_generator, progressive_ngram, wrong_ngram, sim_generator, smoothing, sim_metric, sim_alpha, sim_progressive_alpha)
     )
     options.update(
         get_pretrain_data_options(pretrain_data)

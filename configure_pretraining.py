@@ -71,6 +71,8 @@ class PretrainingConfig(object):
     """
     self.cython_generator = False
     self.sim_generator = False
+    self.sim_alpha = 1
+    self.sim_progressive_alpha = False
     self.ngram_generator = -1  # generate from n_gram,
     self.word_count_pkl_path = ''  #
     self.wrong_ngram = False
