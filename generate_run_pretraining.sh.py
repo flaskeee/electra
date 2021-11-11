@@ -13,20 +13,20 @@ def generate_run_name(d: dict):
     return '.'.join(out)
 
 
-def get_sampler_options(ngram_generator, cython_generator, progressive_ngram, wrong_ngram, cos_generator, smoothing):
-    assert not (ngram_generator > -1 and cos_generator > -1)
+def get_sampler_options(ngram_generator, cython_generator, progressive_ngram, wrong_ngram, sim_generator, smoothing, sim_metric):
+    assert not (ngram_generator > -1 and sim_generator > -1)
     if ngram_generator > -1:
         return {
             'ngram_generator': n,
-            'word_count_pkl_path': f'pretraining_data/ngram/owt_{n}_gram.pkl',
+            'word_count_pkl_path': f'pretraining_data/ngram/owt.{n}_gram.pkl',
             'cython_generator': True,
             'progressive_ngram': progressive_ngram,
             'wrong_ngram': wrong_ngram
         }
-    elif cos_generator > -1:
+    elif sim_generator > -1:
         return {
-            'cos_generator': True,
-            'word_count_pkl_path': f"pretraining_data/ngrams/owt_cos_{cos_generator}_{cos_generator}.{'smoothing.' if smoothing else ''}pkl",
+            'sim_generator': True,
+            'word_count_pkl_path': f"pretraining_data/ngrams/owt.{sim_metric}_{sim_generator}_{sim_generator}.{'smoothing.' if smoothing else ''}pkl",
         }
     else:
         return {}
@@ -72,7 +72,8 @@ singularity exec --nv /groups/bethard/image/tensorflow_1_15.sif $PY run_pretrain
 
 def main(
         ngram=-1,
-        cos_generator=-1,
+        sim_generator=-1,
+        sim_metric='',
         progressive_ngram=False,
         cython_generator=True,
         pretrain_data='owt',
@@ -88,7 +89,7 @@ def main(
         run_name = generate_run_name(cmd_options)
     options = {}
     options.update(
-        get_sampler_options(ngram, cython_generator, progressive_ngram, wrong_ngram, cos_generator, smoothing)
+        get_sampler_options(ngram, cython_generator, progressive_ngram, wrong_ngram, sim_generator, smoothing, sim_metric)
     )
     options.update(
         get_pretrain_data_options(pretrain_data)
