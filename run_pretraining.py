@@ -77,9 +77,9 @@ class PretrainingModel(object):
         - fake token prob calculation (`PretrainingModel._get_masked_lm_output`, `get_softmax_output`
         - fake token sampling / fake input generation  (`PretrainingModel._get_fake_data`)
     """
-    if (config.cython_generator and config.ngram_generator > -1) or config.cos_generator:
-      if config.ngram_generator > -1 and config.cos_generator:
-        raise RuntimeError('Cannot specify ngram_generator > -1 and cos_generator > -1 at the same time')
+    if (config.cython_generator and config.ngram_generator > -1) or config.sim_generator:
+      if config.ngram_generator > -1 and config.sim_generator:
+        raise RuntimeError('Cannot specify ngram_generator > -1 and sim_generator > -1 at the same time')
       word_count = pickle.load(open(config.word_count_pkl_path, 'rb')).astype(np.float32)
       if config.ngram_generator == 0:
         sampler_fn = lambda in_ids, step: sampler.sample_zerogram(in_ids, config.vocab_size-1, config.mask_prob)
@@ -109,7 +109,7 @@ class PretrainingModel(object):
             sampler_fn = lambda in_ids, step: sampler.sample_zero_bigram(in_ids, word_count, config.mask_prob, step.item()/150000)
         else:
             sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob, config.wrong_ngram)
-      elif config.cos_generator:
+      elif config.sim_generator:
         word_count = word_count ** 20
         np.divide(
                 word_count,
