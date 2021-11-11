@@ -110,12 +110,13 @@ class PretrainingModel(object):
         else:
             sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob, config.wrong_ngram)
       elif config.cos_generator:
-        np.add(word_count, 1, out=word_count)
+        word_count = word_count ** 20
         np.divide(
                 word_count,
                 np.sum(word_count, axis=1, keepdims=True),
                 out=word_count
         )
+        word_count = np.nan_to_num(word_count, copy=False)
         sampler_fn = lambda in_ids, step: sampler.sample_by_masked(in_ids, word_count, config.mask_prob)
         
       else:
