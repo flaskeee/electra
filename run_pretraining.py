@@ -34,6 +34,7 @@ from util import training_utils
 from util import utils
 import pickle
 import numpy as np
+import torch
 import sampler
 
 # container for output of the fake token generator
@@ -118,17 +119,28 @@ class PretrainingModel(object):
         else:
             sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob, config.wrong_ngram)
       elif config.sim_generator:
+        word_count = torch.from_numpy(word_count)
+        torch.log_(word_count)
+        def scale_sim(log_scores, alpha):
+          curr_scores = log_scores * alpha
+          curr_scores = torch.nn.functional.softmax(curr_scores, dim=-1)
+          return curr_scores.numpy()
+
         if config.sim_progressive_alpha:
+          def scaled_sim_generator(log_scores, step_size):
+            for i in range(150000):
+              if i % step_size == 0:
+                curr_scores = scale_sim(log_scores, config.sim_alpha * i / 150000)
+              yield curr_scores
+
+          scaled_sim_iter = scaled_sim_generator(word_count, 1000) 
           sampler_fn = lambda in_ids, step: sampler.sample_by_masked(
                   in_ids,
-                  to_prob_(word_count ** (config.sim_alpha * step.item()/150000)),
+                  next(scaled_sim_iter),
                   config.mask_prob
           )
         else:
-          np.log(word_count, out=word_count)
-          np.multiply(word_count, config.sim_alpha, out=word_count)
-          np.exp(word_count, out=word_count)
-          word_count = to_prob_(word_count)
+          word_count = scale_sim(word_count, config.sim_alpha)
           sampler_fn = lambda in_ids, step: sampler.sample_by_masked(in_ids, word_count, config.mask_prob)
         
       else:
