@@ -29,6 +29,7 @@ def get_sampler_options(ngram_generator, cython_generator, progressive_ngram, wr
             'sim_alpha': sim_alpha,
             'sim_progressive_alpha': sim_progressive_alpha,
             'word_count_pkl_path': f"pretraining_data/ngrams/owt.{sim_metric}_{sim_generator}_{sim_generator}.{'smoothing.' if smoothing else ''}pkl",
+            'wrong_ngram': wrong_ngram
         }
     else:
         return {}
@@ -62,7 +63,7 @@ eval "$(conda shell.bash hook)"
 conda activate tf1
 PY=`which python`
 
-DATA_DIR=/xdisk/bethard/jiachengz/electra_pretraining/pretrain_data
+DATA_DIR=pretraining_data
 
 rm -r $DATA_DIR/models/debug
 

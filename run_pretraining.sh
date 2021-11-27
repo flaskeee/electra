@@ -12,7 +12,7 @@ eval "$(conda shell.bash hook)"
 conda activate tf1
 
 
-DATA_DIR=/xdisk/bethard/jiachengz/electra_pretraining/openwebtext
+DATA_DIR=pretraining_data
 # hparam='{"debug": true}'
 # hparam='{"uniform_generator": true, "num_train_steps": 108000}'
 hparam='{"ngram_generator": 1, "ngram_pkl_path": "owt_monogram.pkl"}'

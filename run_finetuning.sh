@@ -17,7 +17,7 @@ PY=`which python`
 task_name=$1
 model_name=$2
 
-DATA_DIR=/xdisk/bethard/jiachengz/electra_pretraining/pretrain_data
+DATA_DIR=pretraining_data
 hparam="{\"task_names\": [\"$task_name\"]}"
 
 singularity exec --nv /groups/bethard/image/tensorflow_1_15.sif $PY run_finetuning.py --data-dir $DATA_DIR --model-name $model_name --hparams "$hparam"
