@@ -34,6 +34,7 @@ from util import training_utils
 from util import utils
 import pickle
 import numpy as np
+import torch
 import sampler
 
 # container for output of the fake token generator
@@ -77,9 +78,17 @@ class PretrainingModel(object):
         - fake token prob calculation (`PretrainingModel._get_masked_lm_output`, `get_softmax_output`
         - fake token sampling / fake input generation  (`PretrainingModel._get_fake_data`)
     """
-    if config.cython_generator and (config.ngram_generator > -1 or config.cos_generator):
-      if config.ngram_generator > -1 and config.cos_generator:
-        raise RuntimeError('Cannot specify ngram_generator > -1 and cos_generator > -1 at the same time')
+    if (config.cython_generator and config.ngram_generator > -1) or config.sim_generator:
+      def to_prob_(count):
+        np.divide(
+                count,
+                np.sum(count, axis=1, keepdims=True),
+                out=count,
+        )
+        return np.nan_to_num(count, copy=False)
+
+      if config.ngram_generator > -1 and config.sim_generator:
+        raise RuntimeError('Cannot specify ngram_generator > -1 and sim_generator > -1 at the same time')
       word_count = pickle.load(open(config.word_count_pkl_path, 'rb')).astype(np.float32)
       if config.ngram_generator == 0:
         sampler_fn = lambda in_ids, step: sampler.sample_zerogram(in_ids, config.vocab_size-1, config.mask_prob)
@@ -109,14 +118,32 @@ class PretrainingModel(object):
             sampler_fn = lambda in_ids, step: sampler.sample_zero_bigram(in_ids, word_count, config.mask_prob, step.item()/150000)
         else:
             sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob, config.wrong_ngram)
-      elif config.cos_generator:
-        np.add(word_count, 1, out=word_count)
-        np.divide(
-                word_count,
-                np.sum(word_count, axis=1, keepdims=True),
-                out=word_count
-        )
-        sampler_fn = lambda in_ids, step: sampler.sample_cos(in_ids, word_count, config.mask_prob)
+      elif config.sim_generator:
+        if config.wrong_ngram:
+          np.random.default_rng().shuffle(word_count)
+        word_count = torch.from_numpy(word_count)
+        torch.log_(word_count)
+        def scale_sim(log_scores, alpha):
+          curr_scores = log_scores * alpha
+          curr_scores = torch.nn.functional.softmax(curr_scores, dim=-1)
+          return curr_scores.numpy()
+
+        if config.sim_progressive_alpha:
+          def scaled_sim_generator(log_scores, step_size):
+            for i in range(150000):
+              if i % step_size == 0:
+                curr_scores = scale_sim(log_scores, config.sim_alpha * i / 150000)
+              yield curr_scores
+
+          scaled_sim_iter = scaled_sim_generator(word_count, 1000) 
+          sampler_fn = lambda in_ids, step: sampler.sample_by_masked(
+                  in_ids,
+                  next(scaled_sim_iter),
+                  config.mask_prob
+          )
+        else:
+          word_count = scale_sim(word_count, config.sim_alpha)
+          sampler_fn = lambda in_ids, step: sampler.sample_by_masked(in_ids, word_count, config.mask_prob)
         
       else:
         raise NotImplementedError('N-grams larger than 2 are not implemented')
