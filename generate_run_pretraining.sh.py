@@ -85,6 +85,7 @@ def main(
         wrong_ngram=False,
         ngram_mod='none',
         smoothing=False,
+        static_word_embedding='',
         debug=False,
 ):
     cmd_options = dict(locals())
@@ -100,6 +101,7 @@ def main(
         get_pretrain_data_options(pretrain_data)
     )
     options['ngram_mod'] = ngram_mod
+    options['static_word_embedding'] = static_word_embedding
 
     return generate_script(options, run_name)
 

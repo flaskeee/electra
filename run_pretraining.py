@@ -474,9 +474,13 @@ def build_transformer(config: configure_pretraining.PretrainingConfig,
   with tf.variable_scope(tf.get_variable_scope(), reuse=reuse):
     if config.static_word_embedding:
       from sklearn.decomposition import PCA
+      import torch
       static_word_embedding_table = PCA(n_components=config.embedding_size).fit_transform(
-        pickle.load(open(config.static_word_embedding, 'rb'))
-      )
+        torch.nn.functional.softmax(
+          torch.from_numpy(pickle.load(open(config.static_word_embedding, 'rb'))).float(),
+          dim=0,
+        ).numpy() * 0.1
+      ).astype(np.float32)
     else:
       static_word_embedding_table = None
     return modeling.BertModel(
