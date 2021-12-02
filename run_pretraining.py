@@ -472,6 +472,13 @@ def build_transformer(config: configure_pretraining.PretrainingConfig,
                       bert_config, reuse=False, **kwargs):
   """Build a transformer encoder network."""
   with tf.variable_scope(tf.get_variable_scope(), reuse=reuse):
+    if config.static_word_embedding:
+      from sklearn.decomposition import PCA
+      static_word_embedding_table = PCA(n_components=config.embedding_size).fit_transform(
+        pickle.load(open(config.static_word_embedding, 'rb'))
+      )
+    else:
+      static_word_embedding_table = None
     return modeling.BertModel(
         bert_config=bert_config,
         is_training=is_training,
@@ -479,6 +486,7 @@ def build_transformer(config: configure_pretraining.PretrainingConfig,
         input_mask=inputs.input_mask,
         token_type_ids=inputs.segment_ids,
         use_one_hot_embeddings=config.use_tpu,
+        static_word_embedding=static_word_embedding_table,
         **kwargs)
 
 

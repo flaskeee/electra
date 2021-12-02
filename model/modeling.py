@@ -148,7 +148,9 @@ class BertModel(object):
                update_embeddings=True,
                untied_embeddings=False,
                ltr=False,
-               rtl=False):
+               rtl=False,
+               static_word_embedding=None,
+               ):
     """Constructor for BertModel.
 
     Args:
@@ -196,7 +198,9 @@ class BertModel(object):
               embedding_size=embedding_size,
               initializer_range=bert_config.initializer_range,
               word_embedding_name="word_embeddings",
-              use_one_hot_embeddings=use_one_hot_embeddings)
+              use_one_hot_embeddings=use_one_hot_embeddings,
+              static_word_embedding=static_word_embedding,
+          )
       else:
         self.token_embeddings = input_embeddings
 
@@ -412,7 +416,8 @@ def embedding_lookup(input_ids,
                      embedding_size=128,
                      initializer_range=0.02,
                      word_embedding_name="word_embeddings",
-                     use_one_hot_embeddings=False):
+                     use_one_hot_embeddings=False,
+                     static_word_embedding=None,):
   """Looks up words embeddings for id tensor.
 
   Args:
@@ -438,10 +443,18 @@ def embedding_lookup(input_ids,
   if original_dims == 2:
     input_ids = tf.expand_dims(input_ids, axis=[-1])
 
-  embedding_table = tf.get_variable(
+  if static_word_embedding is None:
+    embedding_table = tf.get_variable(
+        name=word_embedding_name,
+        shape=[vocab_size, embedding_size],
+        initializer=create_initializer(initializer_range))
+  else:
+    embedding_table = tf.constant(
+      static_word_embedding,
       name=word_embedding_name,
       shape=[vocab_size, embedding_size],
-      initializer=create_initializer(initializer_range))
+      verify_shape=True,
+    )
 
   if original_dims == 3:
     input_shape = get_shape_list(input_ids)
