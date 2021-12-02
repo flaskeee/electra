@@ -119,6 +119,8 @@ class PretrainingModel(object):
         else:
             sampler_fn = lambda in_ids, step: sampler.sample_bigram(in_ids, word_count, config.mask_prob, config.wrong_ngram)
       elif config.sim_generator:
+        if config.wrong_ngram:
+          np.random.default_rng().shuffle(word_count)
         word_count = torch.from_numpy(word_count)
         torch.log_(word_count)
         def scale_sim(log_scores, alpha):
